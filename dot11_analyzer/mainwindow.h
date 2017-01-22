@@ -5,6 +5,7 @@
 #include <qdebug.h>
 #include <QThread>
 #include <QTimer>
+#include <QTreeWidgetItem>
 
 #include "interfacedialog.h"
 #include "capture.h"
@@ -30,7 +31,9 @@ private slots:
 
     void channel_loop();
 
-    void test();
+    void AP_Information();
+
+    void STA_Information(string BSSID, QTreeWidgetItem* parentItem);
 
 private:
     Ui::MainWindow *ui;

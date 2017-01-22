@@ -134,12 +134,10 @@ void Capture::dot11_information_element(PDU *packet, captureInfo *capInfo)
         switch( opt.option() ) {
             case Dot11::SSID:
                 capInfo->SSID = mgt.ssid();
-                //clog << "ssid: " << mgt.ssid() << endl;
                 break;
 
             case Dot11::DS_SET:
                 capInfo->channel = (int)mgt.ds_parameter_set();
-                //clog << "channel " << (int)mgt.ds_parameter_set() << endl;
                 break;
 
             case Dot11::RSN:
@@ -147,6 +145,7 @@ void Capture::dot11_information_element(PDU *packet, captureInfo *capInfo)
                 RSNInformation rsn = mgt.rsn_information();
 
                 /* Group Cypher Suite */
+                /*
                 if (rsn.group_suite() == RSNInformation::CCMP)
                     clog << "WPA2-AES" << endl;
                 else if (rsn.group_suite() == RSNInformation::TKIP)
@@ -155,6 +154,22 @@ void Capture::dot11_information_element(PDU *packet, captureInfo *capInfo)
                     clog << "WEP_40" << endl;
                 else if (rsn.group_suite() == RSNInformation::WEP_104)
                     clog << "WEP_104" << endl;
+                */
+                int count = 0;
+
+                for ( const auto& pairwise : rsn.pairwise_cyphers() ) {
+                    if (pairwise == RSNInformation::CCMP)
+                        count |= PAIRWISE_FLAGS_CCMP;
+                    else if (pairwise == RSNInformation::TKIP)
+                        count |= PAIRWISE_FLAGS_TKIP;
+                    else if (pairwise == RSNInformation::WEP_40)
+                        count |= PAIRWISE_FLAGS_WEP40;
+                    else if (pairwise == RSNInformation::WEP_104)
+                        count |= PAIRWISE_FLAGS_WEP104;
+                }
+
+                capInfo->encryption = encrption_LUT.find(count)->second;
+                capInfo->cipher = cipher_LUT.find(count)->second;
 
                 /* AKM Cypher - Auth Key Management */
                 for ( const auto& akm : rsn.akm_cyphers() ) {
@@ -203,14 +218,14 @@ void Capture::dot11_get_addr(PDU *packet, int type, captureInfo *capInfo)
                 break;
 
             case DS_STATUS_FROMDS:
-                capInfo->STA = mgt.addr1().to_string();
+                capInfo->STAmac = mgt.addr1().to_string();
                 capInfo->BSSID = mgt.addr2().to_string();
                 //clog << "AP: " << mgt.addr3() << endl;
                 break;
 
             case DS_STATUS_TODS:
                 capInfo->BSSID = mgt.addr1().to_string();
-                capInfo->STA = mgt.addr2().to_string();
+                capInfo->STAmac = mgt.addr2().to_string();
                 //clog << "AP: " << mgt.addr3() << endl;
                 break;
 
@@ -229,14 +244,14 @@ void Capture::dot11_get_addr(PDU *packet, int type, captureInfo *capInfo)
                 break;
 
             case DS_STATUS_FROMDS:
-                capInfo->STA = data.addr1().to_string();
+                capInfo->STAmac = data.addr1().to_string();
                 capInfo->BSSID = data.addr2().to_string();
                 //clog << "AP: " << data.addr3() << endl;
                 break;
 
             case DS_STATUS_TODS:
                 capInfo->BSSID = data.addr1().to_string();
-                capInfo->STA = data.addr2().to_string();
+                capInfo->STAmac = data.addr2().to_string();
                 //clog << "AP: " << data.addr3() << endl;
                 break;
 
@@ -249,6 +264,10 @@ void Capture::dot11_get_addr(PDU *packet, int type, captureInfo *capInfo)
 }
 
 void Capture::save_CaptureInfo(captureInfo *capInfo) {
+    /* Broadcast || Multicast*/
+    if (capInfo->BSSID.find("ff:ff:ff:ff:ff:ff") != string::npos
+            || capInfo->STAmac.find("01:00:5e") == 0)
+        return;
 
     /* Find BSSID in AP Hashmap */
     const auto& APsearch = AP_hashmap.find(capInfo->BSSID);
@@ -259,21 +278,55 @@ void Capture::save_CaptureInfo(captureInfo *capInfo) {
         AP_hashmap[capInfo->BSSID].SSID = capInfo->SSID;
         AP_hashmap[capInfo->BSSID].channel = capInfo->channel;
         AP_hashmap[capInfo->BSSID].auth = capInfo->auth;
+        AP_hashmap[capInfo->BSSID].encryption = capInfo->encryption;
+        AP_hashmap[capInfo->BSSID].cipher = capInfo->cipher;
+
 
         if (capInfo->type == FC_MGT_BEACON)
             AP_hashmap[capInfo->BSSID].beaconCount = AP_hashmap[capInfo->BSSID].beaconCount + 1;
 
         else if (capInfo->type == FC_TYPE_DATA) {
-            if (!capInfo->STA.empty()) {    /* If station data */
+            /* Broadcast || Multicast*/
+            if (capInfo->STAmac.find("ff:ff:ff:ff:ff:ff") != string::npos
+                    || capInfo->STAmac.find("01:00:5e") == 0)
+                return;
+
+            if (!capInfo->STAmac.empty()) {    /* If station data */
                 STAinfo STA;
 
-                const auto& STAsearch = STA_hashmap.find(capInfo->BSSID);
+                auto STAsearch = STA_hashmap.find(capInfo->BSSID);
 
-                STA_hashmap.insert(pair<string, STAinfo>(capInfo->BSSID, STA));
+                if (STAsearch == STA_hashmap.end()) {   /* First child station */
+                    STA.STAmac = capInfo->STAmac;
+                    STA.signal = capInfo->signal;
+                    STA.dataCount = 1;
+
+                    AP_hashmap[capInfo->BSSID].STAcount = AP_hashmap[capInfo->BSSID].STAcount + 1;
+                    STA_hashmap.insert(pair<string, STAinfo>(capInfo->BSSID, STA));
+
+                } else {    /* Others */
+                    /* Loop finded station */
+                    for(; STAsearch != STA_hashmap.end(); ++STAsearch) {
+                        if (STAsearch->second.STAmac == capInfo->STAmac) {
+                            AP_hashmap[capInfo->BSSID].dataCount = AP_hashmap[capInfo->BSSID].dataCount + 1;
+                            STAsearch->second.dataCount = STAsearch->second.dataCount + 1;
+                            STA.signal = capInfo->signal;
+                            return;
+                        }
+                    } // End station search loop
+
+                    STA.signal = capInfo->signal;
+                    STA.STAmac = capInfo->STAmac;
+                    STA.dataCount = 1;
+
+                    AP_hashmap[capInfo->BSSID].STAcount = AP_hashmap[capInfo->BSSID].STAcount + 1;
+                    STA_hashmap.insert(pair<string, STAinfo>(capInfo->BSSID, STA));
+                }
+
+
             }
 
-            AP_hashmap[capInfo->BSSID].dataCount = AP_hashmap[capInfo->BSSID].dataCount + 1;
-        }
+        }   // End type data
 
     } else {    /* First */
         APinfo AP;
@@ -282,6 +335,8 @@ void Capture::save_CaptureInfo(captureInfo *capInfo) {
         AP.SSID = capInfo->SSID;
         AP.channel = capInfo->channel;
         AP.auth = capInfo->auth;
+        AP.cipher = capInfo->cipher;
+        AP.encryption = capInfo->encryption;
 
         /* Check type */
         if (capInfo->type == FC_MGT_BEACON)

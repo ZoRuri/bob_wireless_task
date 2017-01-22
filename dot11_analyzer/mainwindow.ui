@@ -25,7 +25,7 @@
     </property>
     <column>
      <property name="text">
-      <string>BSSID</string>
+      <string>ESSID</string>
      </property>
     </column>
     <column>
@@ -55,7 +55,7 @@
     </column>
     <column>
      <property name="text">
-      <string>ENC</string>
+      <string>Ecryption</string>
      </property>
     </column>
     <column>
@@ -70,7 +70,7 @@
     </column>
     <column>
      <property name="text">
-      <string>ESSID</string>
+      <string>BSSID</string>
      </property>
     </column>
    </widget>
@@ -109,7 +109,7 @@
     <enum>TopToolBarArea</enum>
    </attribute>
    <attribute name="toolBarBreak">
-    <bool>true</bool>
+    <bool>false</bool>
    </attribute>
    <addaction name="actionStart"/>
    <addaction name="actionStop"/>

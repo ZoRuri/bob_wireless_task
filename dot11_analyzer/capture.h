@@ -32,9 +32,10 @@ struct captureInfo {
     int8_t signal;
     int type;
     string SSID;
-    string STA = "";
+    string STAmac = "";
     int channel;
-    string encrption;
+    string encryption = "OPEN";
+    string cipher;
     string auth;
 };
 
@@ -45,14 +46,23 @@ struct APinfo {
     string SSID;
     int dataCount = 0;
     int beaconCount = 0;
-    string encrption;
+    string encryption;
+    string cipher;
     string auth;
 };
 
 struct STAinfo {
     string STAmac;
+    int8_t signal;
     int dataCount = 0;
 };
+
+#define PAIRWISE_FLAGS_CCMP 1
+#define PAIRWISE_FLAGS_TKIP 2
+#define PAIRWISE_FLAGS_WEP40 4
+#define PAIRWISE_FLAGS_WEP104 8
+
+#define PAIRWISE_FLAGS_MASK 15
 
 class Capture : public QObject
 {
@@ -81,6 +91,19 @@ private:
     void save_CaptureInfo(captureInfo *capInfo);
 
     string interface;
+
+    /* Lookup table for pairwise */
+    unordered_map <int, string> encrption_LUT = {
+       {PAIRWISE_FLAGS_CCMP, "WPA2"}, {PAIRWISE_FLAGS_TKIP, "WPA"},
+       {PAIRWISE_FLAGS_WEP40, "WEP"}, {PAIRWISE_FLAGS_WEP104, "WEP"},
+       {PAIRWISE_FLAGS_CCMP | PAIRWISE_FLAGS_TKIP, "WPA/WPA2"},
+    };
+
+    unordered_map <int, string> cipher_LUT = {
+       {PAIRWISE_FLAGS_CCMP, "CCMP"}, {PAIRWISE_FLAGS_TKIP, "TKIP"},
+       {PAIRWISE_FLAGS_WEP40, "WEP-40"}, {PAIRWISE_FLAGS_WEP104, "WEP-104"},
+       {PAIRWISE_FLAGS_CCMP | PAIRWISE_FLAGS_TKIP, "CCMP"},
+    };
 
 public slots:
     void run();

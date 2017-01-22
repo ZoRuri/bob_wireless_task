@@ -9,9 +9,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(&captureThread, SIGNAL(started()), &capture, SLOT(run()));
     connect(&timer, SIGNAL(timeout()), this, SLOT(channel_loop()));
-    connect(&timer, SIGNAL(timeout()), this, SLOT(test()) );
-
-    //connect(&APThread, SIGNAL(timeout()), this, SLOT(test()));
+    connect(&timer, SIGNAL(timeout()), this, SLOT(AP_Information()) );
 }
 
 MainWindow::~MainWindow()
@@ -23,8 +21,6 @@ void MainWindow::on_actionInterface_triggered()
 {
     interfaceDialog.setModal(true);
     interfaceDialog.exec();
-
-    qDebug() << interfaceDialog.handle.c_str();
 }
 
 void MainWindow::on_actionStart_triggered()
@@ -41,9 +37,6 @@ void MainWindow::on_actionStart_triggered()
         capture.status = true;
         capture.moveToThread(&captureThread);
         captureThread.start();
-
-        moveToThread(&APThread);
-        APThread.start();
 
         timer.start(1000);
     }
@@ -74,37 +67,75 @@ void MainWindow::channel_loop()
         channel = channel % 6 + 1;
 }
 
-void MainWindow::test()
+void MainWindow::AP_Information()
 {
     for (const auto& it : capture.AP_hashmap) {
-        QList<QTreeWidgetItem *> item = ui->treeWidget->findItems(QString::fromStdString(it.first), Qt::MatchExactly, 0);
+        QList<QTreeWidgetItem *> item = ui->treeWidget->findItems(QString::fromStdString(it.first), Qt::MatchFixedString, 9);
 
         /* New tree widget item */
         if (item.count() == 0) {
             QTreeWidgetItem* itemInfo = new QTreeWidgetItem(ui->treeWidget);
 
-            itemInfo->setText(0, QString::fromStdString(it.first));
-
+            itemInfo->setText(0, QString::fromStdString(it.second.SSID));
+            itemInfo->setText(1, QString::number(capture.STA_hashmap.count(it.first)));
             itemInfo->setText(2, QString::number(it.second.signal));
             itemInfo->setText(3, QString::number(it.second.beaconCount));
             itemInfo->setText(4, QString::number(it.second.dataCount));
             itemInfo->setText(5, QString::number(it.second.channel));
-
+            itemInfo->setText(6, QString::fromStdString(it.second.encryption));
+            itemInfo->setText(7, QString::fromStdString(it.second.cipher));
             itemInfo->setText(8, QString::fromStdString(it.second.auth));
-            itemInfo->setText(9, QString::fromStdString(it.second.SSID));
+            itemInfo->setText(9, QString::fromStdString(it.first).toUpper());
 
 
         } else {    /* Tree widget item is exist */
             QTreeWidgetItem* itemInfo = item[0];
 
+            itemInfo->setText(0, QString::fromStdString(it.second.SSID));
+            itemInfo->setText(1, QString::number(capture.STA_hashmap.count(it.first)));
             itemInfo->setText(2, QString::number(it.second.signal));
             itemInfo->setText(3, QString::number(it.second.beaconCount));
             itemInfo->setText(4, QString::number(it.second.dataCount));
             itemInfo->setText(5, QString::number(it.second.channel));
-
+            itemInfo->setText(6, QString::fromStdString(it.second.encryption));
+            itemInfo->setText(7, QString::fromStdString(it.second.cipher));
             itemInfo->setText(8, QString::fromStdString(it.second.auth));
-            itemInfo->setText(9, QString::fromStdString(it.second.SSID));
+
+            STA_Information(it.first, item[0]);
+
         }
 
     }   // End loop hashmap
+}
+
+void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
+{
+    auto it = capture.STA_hashmap.find(BSSID);
+
+    for (it ; it != capture.STA_hashmap.end() ; ++it) {
+        QList<QTreeWidgetItem *> STAitem = ui->treeWidget->findItems(QString::fromStdString(it->second.STAmac),
+                                                                     Qt::MatchRecursive | Qt::MatchFixedString, 9);
+
+        if (STAitem.count() == 0) { // New station
+            QTreeWidgetItem* itemInfo = new QTreeWidgetItem(parentItem);
+
+            itemInfo->setText(0, QString("STA %1").arg(parentItem->childCount()));
+            itemInfo->setText(1, "-");
+            itemInfo->setText(2, QString::number(it->second.signal));
+
+            itemInfo->setText(9, QString::fromStdString(it->second.STAmac).toUpper());
+
+
+        } else {
+            QTreeWidgetItem* itemInfo = STAitem[0];
+
+            itemInfo->setText(2, QString::number(it->second.signal));
+
+            itemInfo->setText(9, QString::fromStdString(it->second.STAmac).toUpper());
+
+
+        }
+
+    }
+
 }
