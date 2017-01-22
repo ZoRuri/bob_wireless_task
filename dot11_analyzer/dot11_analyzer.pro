@@ -11,10 +11,19 @@ greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 TARGET = dot11_analyzer
 TEMPLATE = app
 
+LIBS += -ltins\
+    -lpcap
+
+CONFIG += console c++11
 
 SOURCES += main.cpp\
-        mainwindow.cpp
+        mainwindow.cpp \
+    capture.cpp \
+    interfacedialog.cpp
 
-HEADERS  += mainwindow.h
+HEADERS  += mainwindow.h \
+    capture.h \
+    interfacedialog.h
 
-FORMS    += mainwindow.ui
+FORMS    += mainwindow.ui \
+    interfacedialog.ui

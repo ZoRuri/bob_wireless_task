@@ -2,6 +2,12 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <qdebug.h>
+#include <QThread>
+#include <QTimer>
+
+#include "interfacedialog.h"
+#include "capture.h"
 
 namespace Ui {
 class MainWindow;
@@ -15,8 +21,31 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+private slots:
+    void on_actionInterface_triggered();
+
+    void on_actionStart_triggered();
+
+    void on_actionStop_triggered();
+
+    void channel_loop();
+
+    void test();
+
 private:
     Ui::MainWindow *ui;
+
+    InterfaceDialog interfaceDialog;
+
+    Capture capture;
+    QThread captureThread;
+
+    QTimer timer;
+
+    QThread APThread;
+
+    int channel = 1;
+    char command[30];
 };
 
 #endif // MAINWINDOW_H
