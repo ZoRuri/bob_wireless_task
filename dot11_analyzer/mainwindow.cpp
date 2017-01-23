@@ -10,6 +10,17 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(&captureThread, SIGNAL(started()), &capture, SLOT(run()));
     connect(&timer, SIGNAL(timeout()), this, SLOT(channel_loop()));
     connect(&timer, SIGNAL(timeout()), this, SLOT(AP_Information()) );
+
+    iLabel = new QLabel(this);
+    statusLabel = new QLabel(this);
+    channelLabel = new QLabel(this);
+
+    iLabel->setText(tr("No Interface"));
+    statusLabel->setText(tr("Stopped"));
+
+    ui->statusBar->addWidget(iLabel, 10);
+    ui->statusBar->addWidget(statusLabel, 10);
+    ui->statusBar->addWidget(channelLabel, 10);
 }
 
 MainWindow::~MainWindow()
@@ -21,6 +32,8 @@ void MainWindow::on_actionInterface_triggered()
 {
     interfaceDialog.setModal(true);
     interfaceDialog.exec();
+
+    iLabel->setText(QString::fromStdString(interfaceDialog.handle));
 }
 
 void MainWindow::on_actionStart_triggered()
@@ -38,6 +51,8 @@ void MainWindow::on_actionStart_triggered()
         capture.moveToThread(&captureThread);
         captureThread.start();
 
+        statusLabel->setText("Running");
+
         timer.start(1000);
     }
 
@@ -51,6 +66,9 @@ void MainWindow::on_actionStop_triggered()
         capture.status = false;
         captureThread.quit();
         captureThread.wait();
+
+        statusLabel->setText("Stopped");
+
     } else {
         QMessageBox::critical(this, "Error", "It's already stopped", "Close");
     }
@@ -60,6 +78,8 @@ void MainWindow::channel_loop()
 {
     snprintf (command, sizeof(command), "iwconfig %s channel %d", interfaceDialog.handle.c_str(), channel);
     system(command);
+
+    channelLabel->setText(QString("Channel: %1").arg(channel));
 
     channel += 6;
 
@@ -112,7 +132,7 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
 {
     auto it = capture.STA_hashmap.find(BSSID);
 
-    for (it ; it != capture.STA_hashmap.end() ; ++it) {
+    for (; it != capture.STA_hashmap.end() ; ++it) {
         QList<QTreeWidgetItem *> STAitem = ui->treeWidget->findItems(QString::fromStdString(it->second.STAmac),
                                                                      Qt::MatchRecursive | Qt::MatchFixedString, 9);
 
@@ -122,6 +142,8 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
             itemInfo->setText(0, QString("STA %1").arg(parentItem->childCount()));
             itemInfo->setText(1, "-");
             itemInfo->setText(2, QString::number(it->second.signal));
+            itemInfo->setText(3, "-");
+            itemInfo->setText(4, QString::number(it->second.dataCount));
 
             itemInfo->setText(9, QString::fromStdString(it->second.STAmac).toUpper());
 
@@ -130,6 +152,8 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
             QTreeWidgetItem* itemInfo = STAitem[0];
 
             itemInfo->setText(2, QString::number(it->second.signal));
+
+            itemInfo->setText(4, QString::number(it->second.dataCount));
 
             itemInfo->setText(9, QString::fromStdString(it->second.STAmac).toUpper());
 

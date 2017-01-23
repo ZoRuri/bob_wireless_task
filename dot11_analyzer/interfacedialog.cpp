@@ -35,6 +35,7 @@ void InterfaceDialog::selectInterface() {
 
     if (currentItem != 0x0) {
         handle = currentItem->text().toStdString();
+
         qDebug() << handle.c_str();
         this->close();
     } else {

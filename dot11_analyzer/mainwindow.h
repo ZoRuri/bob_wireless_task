@@ -6,6 +6,7 @@
 #include <QThread>
 #include <QTimer>
 #include <QTreeWidgetItem>
+#include <QLabel>
 
 #include "interfacedialog.h"
 #include "capture.h"
@@ -46,6 +47,10 @@ private:
     QTimer timer;
 
     QThread APThread;
+
+    QLabel *iLabel;
+    QLabel *statusLabel;
+    QLabel *channelLabel;
 
     int channel = 1;
     char command[30];
