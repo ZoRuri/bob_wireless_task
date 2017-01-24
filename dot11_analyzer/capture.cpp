@@ -85,9 +85,6 @@ void Capture::dot11_mgt_frame(PDU *packet, captureInfo *capInfo)
             dot11_information_element(packet, capInfo);
             break;
 
-        case 14:        // Action no Ack
-            return;
-
         default:
             return;
     }
@@ -114,7 +111,10 @@ void Capture::dot11_ctl_frame(PDU *packet, captureInfo *capInfo)
 
 void Capture::dot11_data_frame(PDU *packet, captureInfo *capInfo)
 {
-    //const Dot11 &dot11 = packet->rfind_pdu<Dot11>();
+    const Dot11 &dot11 = packet->rfind_pdu<Dot11>();
+
+    if (dot11.subtype() & Dot11::DATA_NULL)
+        ;
 
     dot11_get_addr(packet, Dot11::DATA, capInfo);
 

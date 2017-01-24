@@ -6,7 +6,7 @@ InterfaceDialog::InterfaceDialog(QWidget *parent) :
     ui(new Ui::InterfaceDialog)
 {
     ui->setupUi(this);
-    findInterface();
+    //findInterface();
 }
 
 InterfaceDialog::~InterfaceDialog()
@@ -19,12 +19,15 @@ void InterfaceDialog::findInterface() {
     pcap_if_t *dev;
     char errbuf[PCAP_ERRBUF_SIZE];
 
+    /* Initiate */
+    while (int i = ui->listWidget->count())
+        delete ui->listWidget->item(i - 1);
+
+    /* Get interfaces list */
     pcap_findalldevs(&alldevsp, errbuf);
 
     for(dev = alldevsp; dev ; dev = dev->next)
-    {
         ui->listWidget->addItem(dev->name);
-    }
 
     pcap_freealldevs(alldevsp);
 }

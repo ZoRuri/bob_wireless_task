@@ -22,10 +22,12 @@ using namespace std;
 
 /* Define for frame control type */
 #define FC_TYPE_MANAGEMENT  0x00
-#define FC_TYPE_CONTROL 0x10
-#define FC_TYPE_DATA    0x20
+#define FC_TYPE_CONTROL     0x10
+#define FC_TYPE_DATA        0x20
 
-#define FC_MGT_BEACON 0x08
+#define FC_MGT_PROBEREQ     0x04
+#define FC_MGT_PROBERESP    0x05
+#define FC_MGT_BEACON       0x08
 
 struct captureInfo {
     string BSSID;

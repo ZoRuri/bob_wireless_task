@@ -27,3 +27,6 @@ HEADERS  += mainwindow.h \
 
 FORMS    += mainwindow.ui \
     interfacedialog.ui
+
+RESOURCES += \
+    icon_image/icon_image.qrc

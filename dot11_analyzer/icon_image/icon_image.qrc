@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/icon_image">
+        <file>stop_icon.png</file>
+        <file>start_icon.png</file>
+        <file>settings_icon.png</file>
+        <file>eraser_icon.png</file>
+    </qresource>
+</RCC>

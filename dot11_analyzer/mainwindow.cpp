@@ -7,6 +7,18 @@ MainWindow::MainWindow(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    /* TreeWidget column size */
+    ui->treeWidget->header()->resizeSection(0, 230);    /* ESSID */
+    ui->treeWidget->header()->resizeSection(1, 50);     /* STA Count */
+    ui->treeWidget->header()->resizeSection(2, 60);     /* Signal */
+    ui->treeWidget->header()->resizeSection(3, 80);     /* Beacon */
+    ui->treeWidget->header()->resizeSection(4, 80);     /* Data */
+    ui->treeWidget->header()->resizeSection(5, 50);     /* Channel */
+
+    ui->treeWidget->header()->resizeSection(7, 70);     /* Cipher */
+
+    ui->treeWidget->header()->resizeSection(9, 120);    /* BSSID */
+
     connect(&captureThread, SIGNAL(started()), &capture, SLOT(run()));
     connect(&timer, SIGNAL(timeout()), this, SLOT(channel_loop()));
     connect(&timer, SIGNAL(timeout()), this, SLOT(AP_Information()) );
@@ -17,6 +29,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     iLabel->setText(tr("No Interface"));
     statusLabel->setText(tr("Stopped"));
+    channelLabel->setText(tr("Channel"));
 
     ui->statusBar->addWidget(iLabel, 10);
     ui->statusBar->addWidget(statusLabel, 10);
@@ -30,6 +43,8 @@ MainWindow::~MainWindow()
 
 void MainWindow::on_actionInterface_triggered()
 {
+    interfaceDialog.findInterface();
+
     interfaceDialog.setModal(true);
     interfaceDialog.exec();
 
@@ -40,7 +55,7 @@ void MainWindow::on_actionStart_triggered()
 {
     /* Check handle */
     if ( interfaceDialog.handle.empty() ) {
-        QMessageBox::critical(this, "Error", "Please select interface", "Close");
+        QMessageBox::critical(this, "Error", tr("Please select interface"), "Close");
 
     } else if (capture.status) {
         QMessageBox::critical(this, "Error", "It's already started", "Close");
@@ -52,8 +67,10 @@ void MainWindow::on_actionStart_triggered()
         captureThread.start();
 
         statusLabel->setText("Running");
+        ui->actionStart->setDisabled(true);
+        ui->actionStop->setEnabled(true);
 
-        timer.start(2000);
+        timer.start(1000);
     }
 
 }
@@ -69,9 +86,21 @@ void MainWindow::on_actionStop_triggered()
 
         statusLabel->setText("Stopped");
 
+        ui->actionStop->setDisabled(true);
+        ui->actionStart->setEnabled(true);
+
     } else {
         QMessageBox::critical(this, "Error", "It's already stopped", "Close");
     }
+}
+
+void MainWindow::on_actionClear_triggered()
+{
+    capture.AP_hashmap.clear();
+    capture.STA_hashmap.clear();
+
+    while (int i = ui->treeWidget->topLevelItemCount())
+        delete ui->treeWidget->topLevelItem(i - 1);
 }
 
 void MainWindow::channel_loop()
@@ -144,6 +173,7 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
             itemInfo->setText(2, QString::number(it->second.signal));
             itemInfo->setText(3, "-");
             itemInfo->setText(4, QString::number(it->second.dataCount));
+            itemInfo->setText(5, (parentItem->text(5)));
 
             itemInfo->setText(9, QString::fromStdString(it->second.STAmac).toUpper());
 
@@ -160,6 +190,7 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
 
         }
 
-    }
+    } // End Loop
 
 }
+

@@ -36,6 +36,8 @@ private slots:
 
     void STA_Information(string BSSID, QTreeWidgetItem* parentItem);
 
+    void on_actionClear_triggered();
+
 private:
     Ui::MainWindow *ui;
 
