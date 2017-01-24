@@ -53,7 +53,7 @@ void MainWindow::on_actionStart_triggered()
 
         statusLabel->setText("Running");
 
-        timer.start(1000);
+        timer.start(2000);
     }
 
 }
@@ -121,7 +121,7 @@ void MainWindow::AP_Information()
             itemInfo->setText(7, QString::fromStdString(it.second.cipher));
             itemInfo->setText(8, QString::fromStdString(it.second.auth));
 
-            STA_Information(it.first, item[0]);
+            STA_Information(it.first, itemInfo);
 
         }
 
@@ -130,9 +130,9 @@ void MainWindow::AP_Information()
 
 void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
 {
-    auto it = capture.STA_hashmap.find(BSSID);
+    auto range = capture.STA_hashmap.equal_range(BSSID);
 
-    for (; it != capture.STA_hashmap.end() ; ++it) {
+    for (auto it = range.first; it != range.second ; ++it) {
         QList<QTreeWidgetItem *> STAitem = ui->treeWidget->findItems(QString::fromStdString(it->second.STAmac),
                                                                      Qt::MatchRecursive | Qt::MatchFixedString, 9);
 
