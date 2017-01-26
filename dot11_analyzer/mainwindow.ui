@@ -14,66 +14,62 @@
    <string>Dot11 Analyzer</string>
   </property>
   <widget class="QWidget" name="centralWidget">
-   <widget class="QTreeWidget" name="treeWidget">
-    <property name="geometry">
-     <rect>
-      <x>0</x>
-      <y>0</y>
-      <width>1000</width>
-      <height>651</height>
-     </rect>
-    </property>
-    <column>
-     <property name="text">
-      <string>ESSID</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>STA</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>Signal</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>Beacons</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>Data</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>Ch</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>Ecryption</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>Cipher</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>Auth</string>
-     </property>
-    </column>
-    <column>
-     <property name="text">
-      <string>BSSID</string>
-     </property>
-    </column>
-   </widget>
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QTreeWidget" name="treeWidget">
+      <column>
+       <property name="text">
+        <string>ESSID</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>STA</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Signal</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Beacons</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Data</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Ch</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Ecryption</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Cipher</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>Auth</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
+        <string>BSSID</string>
+       </property>
+      </column>
+     </widget>
+    </item>
+   </layout>
   </widget>
   <widget class="QMenuBar" name="menuBar">
    <property name="geometry">
