@@ -116,7 +116,7 @@ unsigned char buffer2[65536];
 
 /* this routine handles to 802.11 to Ethernet translation */
 
-int write_packet( u_char *dumpdata, struct pcap_pkthdr *pkh, unsigned char *h80211 )
+int write_packet( pcap_t *out_handle, struct pcap_pkthdr *pkh, unsigned char *h80211 )
 {
     printf("wp\n");
 
@@ -191,7 +191,8 @@ int write_packet( u_char *dumpdata, struct pcap_pkthdr *pkh, unsigned char *h802
 
     n = sizeof( struct pcap_pkthdr );
 
-    pcap_dump(dumpdata, pkh, buffer);
+    //pcap_dump(dumpdata, pkh, buffer);
+    pcap_inject(out_handle, buffer, pkh->caplen);
 
     n = pkh->caplen;
 
@@ -501,7 +502,11 @@ usage:
 
     char errbuf[PCAP_ERRBUF_SIZE];
 
-    handle = pcap_open_offline( argv[optind], errbuf );
+    struct pcap_pkthdr *pkh;
+    const u_char *data;
+
+    //handle = pcap_open_offline( argv[optind], errbuf );
+    handle = pcap_open_live(argv[optind], 65535, 1, 1000, errbuf);
 
     if (handle == NULL) {
         perror("pcap_open_offline");
@@ -602,6 +607,8 @@ usage:
 
     dumpdata = pcap_dump_open( handle, (const char *)buffer );
 
+    pcap_t *out_handle = pcap_open_live("lo", 65535, 1, 1000, errbuf);
+
     /* loop reading and deciphering the packets */
 
     memset( &stats, 0, sizeof( stats ) );
@@ -621,8 +628,6 @@ usage:
 
         /* read one packet */
 
-        struct pcap_pkthdr *pkh;
-        const u_char *data;
 
         int I, res;
 
@@ -840,7 +845,7 @@ usage:
 
                 h80211[1] &= 0xBF;
 
-                if( write_packet( dumpdata, pkh, h80211 ) != 0 )
+                if( write_packet( out_handle, pkh, h80211 ) != 0 )
                     break;
             }
             else
@@ -884,13 +889,15 @@ usage:
 
                 h80211[1] &= 0xBF;
 
-                if( write_packet( (u_char *)dumpdata, pkh, h80211 ) != 0 )
+                if( write_packet( out_handle, pkh, h80211 ) != 0 )
                     break;
             }
         }
         else
         {
             /* check ethertype == EAPOL */
+
+            printf("EAPOL\n");
 
             z += 6;
 
@@ -901,7 +908,7 @@ usage:
                 if( opt.crypt != CRYPT_NONE )
                     continue;
 
-                if( write_packet( dumpdata, pkh, h80211 ) != 0 )
+                if( write_packet( out_handle, pkh, h80211 ) != 0 )
                     break;
 				else
 					continue;
