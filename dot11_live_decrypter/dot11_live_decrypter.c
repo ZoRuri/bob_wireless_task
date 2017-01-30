@@ -1,3 +1,5 @@
+/* This program was created by modifying airdecap-ng. */
+
 /*
  *  802.11 to Ethernet pcap translator
  *
@@ -40,6 +42,19 @@
 #include <time.h>
 #include <getopt.h>
 
+/* tap inteface */
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <linux/if.h>
+#include <linux/if_tun.h>
+
+#include <sys/ioctl.h>
+//
+
 #include <pcap/pcap.h>
 
 #include "version.h"
@@ -61,16 +76,19 @@ extern int calc_crc_buf( unsigned char *buf, int len );
 char usage[] =
 
 "\n"
+"  This program was created by modifying airdecap-ng\n"
+"\n"
 "  %s - (C) 2006-2015 Thomas d\'Otreppe\n"
 "  http://www.aircrack-ng.org\n"
 "\n"
-"  usage: airdecap-ng [options] <pcap file>\n"
+"  usage: dot11_live_decrypter [options] <interface>\n"
 "\n"
 "  Common options:\n"
 "      -l         : don't remove the 802.11 header\n"
 "      -b <bssid> : access point MAC address filter\n"
 "      -e <essid> : target network SSID\n"
 "      -o <fname> : output file for decrypted packets (default <src>-dec)\n"
+"      -t <tname> : tap interface for decrypted packets"
 "\n"
 "  WEP specific option:\n"
 "      -w <key>   : target network WEP key in hex\n"
@@ -106,6 +124,7 @@ struct options
     unsigned char wepkey[64];
     int weplen, crypt;
     int store_bad;
+    char tap_interface[IFNAMSIZ];
     char decrypted_fpath[65536];
     char corrupted_fpath[65536];
 }
@@ -115,6 +134,58 @@ unsigned char buffer[65536];
 unsigned char buffer2[65536];
 
 /* this routine handles to 802.11 to Ethernet translation */
+
+void generate_tap_interface (char *tapDev) {
+    printf("%s\n",tapDev);
+
+    /* Generate tap interface */
+    struct ifreq ifr;
+    int fd, err;
+    char *clonedev = "/dev/net/tun";
+
+    /* Open clone device */
+    if ( (fd = open(clonedev, O_RDWR)) < 0)
+        perror("fd error");
+
+    memset(&ifr, 0, sizeof(ifr));
+
+    ifr.ifr_flags = IFF_TAP | IFF_NO_PI;
+
+    strncpy(ifr.ifr_name, tapDev, IFNAMSIZ);
+
+    if((err = ioctl(fd, TUNSETIFF, (void *) &ifr)) < 0) {
+        close(fd);
+        perror("ioctl error");
+    }
+
+    // End Generate tap interface
+
+    /* Link up tap interface */
+
+    int sockfd;
+
+    if ((sockfd = socket(AF_INET, SOCK_DGRAM, PF_UNSPEC)) < 0)
+        perror("sockfd");
+
+    struct ifreq ifr2;
+    memset(&ifr2, 0, sizeof(ifr2));
+
+    strncpy(ifr2.ifr_name, tapDev, IFNAMSIZ);
+
+    if ((err = ioctl(sockfd, SIOCGIFFLAGS, (void *) &ifr2)) < 0) {
+        close(sockfd);
+        perror("ioctl error");
+    }
+
+    ifr2.ifr_flags |= IFF_UP | IFF_RUNNING;
+
+    if ((err = ioctl(sockfd, SIOCSIFFLAGS, (void *) &ifr2)) < 0) {
+        close(sockfd);
+        perror("ioctl error");
+    }
+
+    // End Link up tap interface
+}
 
 int write_packet( pcap_t *out_handle, struct pcap_pkthdr *pkh, unsigned char *h80211 )
 {
@@ -240,7 +311,7 @@ int main( int argc, char *argv[] )
             {0,         0, 0,  0 }
         };
 
-        int option = getopt_long( argc, argv, "lb:k:e:o:p:w:c:H",
+        int option = getopt_long( argc, argv, "lb:k:e:o:t:p:w:c:H",
                         long_options, &option_index );
 
         if( option < 0 ) break;
@@ -457,6 +528,20 @@ int main( int argc, char *argv[] )
             	printf( usage, getVersion("Airdecap-ng", _MAJ, _MIN, _SUB_MIN, _REVISION, _BETA, _RC));
             	return( 1 );
 
+            case 't' :
+
+                if ( opt.tap_interface[0])
+                {
+                    printf( "tap interface for decrypted packets already specified.\n" );
+                    printf("\"%s --help\" for help.\n", argv[0]);
+                    return( 1 );
+                }
+                printf("aaaaadfdf\n");
+                printf("aa: %s\n", optarg);
+
+                strncpy( opt.tap_interface, optarg, sizeof( opt.tap_interface ) - 1 );
+                break;
+
             default : goto usage;
         }
     }
@@ -496,8 +581,10 @@ usage:
         }
     }
 
-    /* open pcap_offline */
+    /* Generate tap interface */
+    generate_tap_interface(opt.tap_interface);
 
+    /* open pcap_offline */
     pcap_t *handle;
 
     char errbuf[PCAP_ERRBUF_SIZE];
@@ -509,9 +596,11 @@ usage:
     handle = pcap_open_live(argv[optind], 65535, 1, 1000, errbuf);
 
     if (handle == NULL) {
-        perror("pcap_open_offline");
+        perror("pcap_open_live");
         return -1;
     }
+
+    pcap_set_rfmon(handle, 1);
 
     linktype = pcap_datalink(handle);
     printf("aa:%d\n", linktype);
@@ -607,7 +696,7 @@ usage:
 
     dumpdata = pcap_dump_open( handle, (const char *)buffer );
 
-    pcap_t *out_handle = pcap_open_live("lo", 65535, 1, 1000, errbuf);
+    pcap_t *out_handle = pcap_open_live(opt.tap_interface, 65535, 1, 1000, errbuf);
 
     /* loop reading and deciphering the packets */
 
@@ -635,6 +724,8 @@ usage:
             pcap_perror(handle, "pcap_next_ex");
             return -1;
         }
+
+        stats.nb_read++;
 
         /*
         for (I = 0; I < (int)pkh->caplen; ++I)
@@ -897,7 +988,7 @@ usage:
         {
             /* check ethertype == EAPOL */
 
-            printf("EAPOL\n");
+            printf("\rEAPOL \n");
 
             z += 6;
 
