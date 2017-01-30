@@ -117,6 +117,8 @@ stats;
 struct options
 {
     int no_convert;
+    int out_file;
+    int out_interface;
     char essid[36];
     char passphrase[65];
     unsigned char bssid[6];
@@ -133,11 +135,19 @@ opt;
 unsigned char buffer[65536];
 unsigned char buffer2[65536];
 
-/* this routine handles to 802.11 to Ethernet translation */
+/* For error process */
+void err_sys(char *errmsg) {
+    perror(errmsg);
+    exit(1);
+}
 
+void err_pcap(pcap_t *handle, char *errmsg) {
+    pcap_perror(handle, errmsg);
+    exit(1);
+}
+
+/* generate tap interface for output */
 void generate_tap_interface (char *tapDev) {
-    printf("%s\n",tapDev);
-
     /* Generate tap interface */
     struct ifreq ifr;
     int fd, err;
@@ -145,7 +155,7 @@ void generate_tap_interface (char *tapDev) {
 
     /* Open clone device */
     if ( (fd = open(clonedev, O_RDWR)) < 0)
-        perror("fd error");
+        err_sys("fd error");
 
     memset(&ifr, 0, sizeof(ifr));
 
@@ -155,7 +165,7 @@ void generate_tap_interface (char *tapDev) {
 
     if((err = ioctl(fd, TUNSETIFF, (void *) &ifr)) < 0) {
         close(fd);
-        perror("ioctl error");
+        err_sys("ioctl error");
     }
 
     // End Generate tap interface
@@ -165,7 +175,7 @@ void generate_tap_interface (char *tapDev) {
     int sockfd;
 
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, PF_UNSPEC)) < 0)
-        perror("sockfd");
+        err_sys("sockfd error");
 
     struct ifreq ifr2;
     memset(&ifr2, 0, sizeof(ifr2));
@@ -174,24 +184,23 @@ void generate_tap_interface (char *tapDev) {
 
     if ((err = ioctl(sockfd, SIOCGIFFLAGS, (void *) &ifr2)) < 0) {
         close(sockfd);
-        perror("ioctl error");
+        err_sys("ioctl error");
     }
 
     ifr2.ifr_flags |= IFF_UP | IFF_RUNNING;
 
     if ((err = ioctl(sockfd, SIOCSIFFLAGS, (void *) &ifr2)) < 0) {
         close(sockfd);
-        perror("ioctl error");
+        err_sys("ioctl error");
     }
 
     // End Link up tap interface
 }
 
+/* this routine handles to 802.11 to Ethernet translation */
+
 int write_packet( pcap_t *out_handle, struct pcap_pkthdr *pkh, unsigned char *h80211 )
 {
-    printf("wp\n");
-
-    int n;
     unsigned char arphdr[12];
     int qosh_offset = 0;
 
@@ -260,12 +269,8 @@ int write_packet( pcap_t *out_handle, struct pcap_pkthdr *pkh, unsigned char *h8
         pkh->caplen += 12;
     }
 
-    n = sizeof( struct pcap_pkthdr );
-
     //pcap_dump(dumpdata, pkh, buffer);
     pcap_inject(out_handle, buffer, pkh->caplen);
-
-    n = pkh->caplen;
 
     return( 0 );
 }
@@ -536,8 +541,6 @@ int main( int argc, char *argv[] )
                     printf("\"%s --help\" for help.\n", argv[0]);
                     return( 1 );
                 }
-                printf("aaaaadfdf\n");
-                printf("aa: %s\n", optarg);
 
                 strncpy( opt.tap_interface, optarg, sizeof( opt.tap_interface ) - 1 );
                 break;
@@ -555,7 +558,7 @@ usage:
 	    }
 		if( argc - optind == 0)
 	    {
-	    	printf("No file to decrypt specified.\n");
+            printf("No interface or file to decrypt specified.\n");
 	    }
 	    if(argc > 1)
 	    {
@@ -584,7 +587,7 @@ usage:
     /* Generate tap interface */
     generate_tap_interface(opt.tap_interface);
 
-    /* open pcap_offline */
+    /* Get pcap handle */
     pcap_t *handle;
 
     char errbuf[PCAP_ERRBUF_SIZE];
@@ -595,15 +598,13 @@ usage:
     //handle = pcap_open_offline( argv[optind], errbuf );
     handle = pcap_open_live(argv[optind], 65535, 1, 1000, errbuf);
 
-    if (handle == NULL) {
-        perror("pcap_open_live");
-        return -1;
-    }
-
-    pcap_set_rfmon(handle, 1);
+    if (handle == NULL)
+        err_pcap(handle, "pcap_open_live error");
 
     linktype = pcap_datalink(handle);
-    printf("aa:%d\n", linktype);
+
+    if (linktype == PCAP_ERROR_NOT_ACTIVATED)
+        err_pcap(handle, "linktype error");
 
     /* is regular 802.11 packet ? */
     if (linktype != LINKTYPE_IEEE802_11 &&
@@ -692,11 +693,14 @@ usage:
                             LINKTYPE_ETHERNET;
     */
 
-    pcap_dumper_t *dumpdata;
+    //pcap_dumper_t *dumpdata;
 
-    dumpdata = pcap_dump_open( handle, (const char *)buffer );
+    //dumpdata = pcap_dump_open( handle, (const char *)buffer );
 
     pcap_t *out_handle = pcap_open_live(opt.tap_interface, 65535, 1, 1000, errbuf);
+
+    if (out_handle == NULL)
+        err_pcap(out_handle, "pcap_open_live error");
 
     /* loop reading and deciphering the packets */
 
@@ -710,29 +714,17 @@ usage:
         {
             /* update the status line every second */
 
-            printf( "\33[KRead %lu packets...\r", stats.nb_read );
+            printf( "\33[KRead %lu packets\tDecrypt %lu packets\r", stats.nb_read, stats.nb_unwpa );
             fflush( stdout );
             tt = time( NULL );
         }
 
         /* read one packet */
 
-
-        int I, res;
-
-        if ( (res = pcap_next_ex(handle, &pkh, &data)) < 0 ) {
-            pcap_perror(handle, "pcap_next_ex");
-            return -1;
-        }
+        if ( pcap_next_ex(handle, &pkh, &data) < 0 )
+            err_pcap(handle, "pcap_next_ex error");
 
         stats.nb_read++;
-
-        /*
-        for (I = 0; I < (int)pkh->caplen; ++I)
-            printf("%x", *(data + I));
-
-        printf("\n");
-        */
 
         h80211 = (u_char *)data;
 
@@ -988,8 +980,6 @@ usage:
         {
             /* check ethertype == EAPOL */
 
-            printf("\rEAPOL \n");
-
             z += 6;
 
             if( h80211[z] != 0x88 || h80211[z + 1] != 0x8E )
@@ -1098,6 +1088,7 @@ usage:
             }
 
             st_cur->valid_ptk = calc_ptk( st_cur, opt.pmk );
+
         }
     }
 
@@ -1116,15 +1107,6 @@ usage:
 
     /* write some statistics */
 
-    printf( "\33[KTotal number of packets read      %8lu\n"
-                 "Total number of WEP data packets  %8lu\n"
-                 "Total number of WPA data packets  %8lu\n"
-                 "Number of plaintext data packets  %8lu\n"
-                 "Number of decrypted WEP  packets  %8lu\n"
-                 "Number of corrupted WEP  packets  %8lu\n"
-                 "Number of decrypted WPA  packets  %8lu\n",
-            stats.nb_read, stats.nb_wep, stats.nb_wpa,
-            stats.nb_plain, stats.nb_unwep, stats.nb_bad, stats.nb_unwpa );
 
     return( 0 );
 }
