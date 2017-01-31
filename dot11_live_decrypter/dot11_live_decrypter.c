@@ -276,7 +276,8 @@ int write_packet( pcap_t *out_handle, struct pcap_pkthdr *pkh, unsigned char *h8
     if (opt.out_file == 1)
         pcap_dump((u_char *)dumpdata, pkh, buffer);
 
-    pcap_inject(out_handle, buffer, pkh->caplen);
+    if (opt.out_interface == 1)
+        pcap_inject(out_handle, buffer, pkh->caplen);
 
     return( 0 );
 }
