@@ -81,13 +81,14 @@ char usage[] =
 "  %s - (C) 2006-2015 Thomas d\'Otreppe\n"
 "  http://www.aircrack-ng.org\n"
 "\n"
-"  usage: dot11_live_decrypter [options] <interface>\n"
+"  usage: dot11_live_decrypter [options] <interface / filename (use -f option)>\n"
 "\n"
 "  Common options:\n"
 "      -l         : don't remove the 802.11 header\n"
+"      -f         : decrypt from pcap file\n"
 "      -b <bssid> : access point MAC address filter\n"
 "      -e <essid> : target network SSID\n"
-"      -o <fname> : output file for decrypted packets (default <src>-dec)\n"
+"      -o <fname> : output file for decrypted packets\n"
 "      -t <tname> : tap interface for decrypted packets"
 "\n"
 "  WEP specific option:\n"
@@ -119,6 +120,7 @@ struct options
     int no_convert;
     int out_file;
     int out_interface;
+    int decrypt_file;
     char essid[36];
     char passphrase[65];
     unsigned char bssid[6];
@@ -135,15 +137,17 @@ opt;
 unsigned char buffer[65536];
 unsigned char buffer2[65536];
 
+pcap_dumper_t *dumpdata;
+
 /* For error process */
 void err_sys(char *errmsg) {
     perror(errmsg);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 void err_pcap(pcap_t *handle, char *errmsg) {
     pcap_perror(handle, errmsg);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 /* generate tap interface for output */
@@ -269,7 +273,9 @@ int write_packet( pcap_t *out_handle, struct pcap_pkthdr *pkh, unsigned char *h8
         pkh->caplen += 12;
     }
 
-    //pcap_dump(dumpdata, pkh, buffer);
+    if (opt.out_file == 1)
+        pcap_dump((u_char *)dumpdata, pkh, buffer);
+
     pcap_inject(out_handle, buffer, pkh->caplen);
 
     return( 0 );
@@ -280,7 +286,7 @@ int main( int argc, char *argv[] )
     time_t tt;
     unsigned magic;
     char *s, buf[128];
-    FILE *f_out, *f_bad=NULL;
+    FILE *f_bad=NULL;
     unsigned long crc;
     int i = 0, n, linktype;
     unsigned z;
@@ -316,7 +322,7 @@ int main( int argc, char *argv[] )
             {0,         0, 0,  0 }
         };
 
-        int option = getopt_long( argc, argv, "lb:k:e:o:t:p:w:c:H",
+        int option = getopt_long( argc, argv, "flb:k:e:o:t:p:w:c:H",
                         long_options, &option_index );
 
         if( option < 0 ) break;
@@ -437,6 +443,8 @@ int main( int argc, char *argv[] )
 
             case 'o' :
 
+                opt.out_file = 1;
+
                 if ( opt.decrypted_fpath[0])
                 {
                     printf( "filename for decrypted packets already specified.\n" );
@@ -444,7 +452,15 @@ int main( int argc, char *argv[] )
                     return( 1 );
                 }
 
+                if (opt.decrypted_fpath == NULL)
+                {
+                    printf( "You must specify filename.\n");
+                    printf("\"%s --help\" for help.\n", argv[0]);
+                    return ( 1 );
+                }
+
                 strncpy( opt.decrypted_fpath, optarg, sizeof( opt.decrypted_fpath ) - 1 );
+
                 break;
 
             case 'c' :
@@ -535,6 +551,8 @@ int main( int argc, char *argv[] )
 
             case 't' :
 
+                opt.out_interface = 1;
+
                 if ( opt.tap_interface[0])
                 {
                     printf( "tap interface for decrypted packets already specified.\n" );
@@ -544,6 +562,12 @@ int main( int argc, char *argv[] )
 
                 strncpy( opt.tap_interface, optarg, sizeof( opt.tap_interface ) - 1 );
                 break;
+
+            case 'f' :
+
+                opt.decrypt_file = 1;
+                break;
+
 
             default : goto usage;
         }
@@ -584,8 +608,16 @@ usage:
         }
     }
 
+    if ( !(opt.out_file || opt.out_interface) )
+    {
+        printf( "You must specify tap interface (-t) or filename (-o).\n" );
+        printf("\"%s --help\" for help.\n", argv[0]);
+        return( 1 );
+    }
+
     /* Generate tap interface */
-    generate_tap_interface(opt.tap_interface);
+    if (opt.out_interface == 1)
+        generate_tap_interface(opt.tap_interface);
 
     /* Get pcap handle */
     pcap_t *handle;
@@ -595,15 +627,37 @@ usage:
     struct pcap_pkthdr *pkh;
     const u_char *data;
 
-    //handle = pcap_open_offline( argv[optind], errbuf );
-    handle = pcap_open_live(argv[optind], 65535, 1, 1000, errbuf);
+    printf("sdf %d\n", opt.decrypt_file);
 
-    if (handle == NULL)
-        err_pcap(handle, "pcap_open_live error");
+    if (opt.decrypt_file == 1)
+    {
+        if ((handle = pcap_open_offline( argv[optind], errbuf )) == NULL)
+            err_pcap(handle, "pcap_open_offline error");
+    }
+    else
+    {
+        /* Same as "pcap_open_live(argv[optind], 65535, 1, 1000, errbuf)" */
+        if ((handle = pcap_create(argv[optind], errbuf)) == NULL)
+            err_pcap(handle, "pcap_create error");
 
-    linktype = pcap_datalink(handle);
+        if (pcap_set_promisc(handle, 1))
+            err_pcap(handle, "pcap_set_promisc error");
 
-    if (linktype == PCAP_ERROR_NOT_ACTIVATED)
+        if (pcap_set_snaplen(handle, 65535))        /* Snapshot length */
+            err_pcap(handle, "pcap_set_snaplen error");
+
+        if (pcap_set_timeout(handle, 1000))         /* Timeout in milliseconds */
+            err_pcap(handle, "pcap_set_timeout");
+
+        if (pcap_set_rfmon(handle, 1))              /* Set monitor mode */
+            err_pcap(handle, "pcap_set_rfmon error");
+
+        if (pcap_activate(handle))
+            err_pcap(handle, "pcap_active error");
+        // End get live handle
+    }
+
+    if ((linktype = pcap_datalink(handle)) == PCAP_ERROR_NOT_ACTIVATED)
         err_pcap(handle, "linktype error");
 
     /* is regular 802.11 packet ? */
@@ -617,60 +671,23 @@ usage:
         return( 1 );
     }
 
-
-    /* ??? */
-    n = strlen( argv[optind] );
-
-    if( n > 4 && ( n + 5 < (int) sizeof( buffer ) ) &&
-        argv[optind][n - 4] == '.' )
-    {
-        memcpy( buffer , argv[optind], n - 4 );
-        memcpy( buffer2, argv[optind], n - 4 );
-        memcpy( buffer  + n - 4, "-dec", 4 );
-        memcpy( buffer2 + n - 4, "-bad", 4 );
-        memcpy( buffer  + n, argv[optind] + n - 4, 5 );
-        memcpy( buffer2 + n, argv[optind] + n - 4, 5 );
-    }
-    else
-    {
-        if( n > 5 && ( n + 6 < (int) sizeof( buffer ) ) &&
-            argv[optind][n - 5] == '.' )
-        {
-            memcpy( buffer , argv[optind], n - 5 );
-            memcpy( buffer2, argv[optind], n - 5 );
-            memcpy( buffer  + n - 5, "-dec", 4 );
-            memcpy( buffer2 + n - 5, "-bad", 4 );
-            memcpy( buffer  + n - 1, argv[optind] + n - 5, 6 );
-            memcpy( buffer2 + n - 1, argv[optind] + n - 5, 6 );
-        }
-        else
-        {
-            memset( buffer , 0, sizeof( buffer ) );
-            memset( buffer2, 0, sizeof( buffer ) );
-            snprintf( (char *) buffer , sizeof( buffer ) - 1,
-                      "%s-dec", argv[optind] );
-            snprintf( (char *) buffer2, sizeof( buffer ) - 1,
-                      "%s-bad", argv[optind] );
-        }
-    }
-
-    if( opt.crypt == CRYPT_WEP && opt.no_convert == 1 )
+    if ( opt.crypt == CRYPT_WEP && opt.no_convert == 1 )
     {
         opt.store_bad=1;
     }
 
-    /* Support manually-configured output files*/
-    if ( opt.decrypted_fpath[0])
-        f_out = fopen( opt.decrypted_fpath, "wb+");
-    else
-        f_out = fopen( (char *) buffer, "wb+");
+//    /* Support manually-configured output files*/
+//    if ( opt.decrypted_fpath[0])
+//        f_out = fopen( opt.decrypted_fpath, "wb+");
+//    else
+//        f_out = fopen( (char *) buffer, "wb+");
 
-    if( f_out == NULL )
-    {
-        perror( "fopen failed" );
-        printf( "Could not create \"%s\".\n", buffer );
-        return( 1 );
-    }
+//    if( f_out == NULL )
+//    {
+//        perror( "fopen failed" );
+//        printf( "Could not create \"%s\".\n", buffer );
+//        return( 1 );
+//    }
 
     if(opt.store_bad)
     {
@@ -693,9 +710,12 @@ usage:
                             LINKTYPE_ETHERNET;
     */
 
-    //pcap_dumper_t *dumpdata;
-
-    //dumpdata = pcap_dump_open( handle, (const char *)buffer );
+    /* -o option on */
+    if (opt.out_file == 1) {
+        //if (pcap_set_datalink( handle, LINKTYPE_ETHERNET ) < 0)
+            //err_pcap(handle, "pcap_set_datalink error");
+        dumpdata = pcap_dump_open( handle, (const char *)opt.decrypted_fpath );
+    }
 
     pcap_t *out_handle = pcap_open_live(opt.tap_interface, 65535, 1, 1000, errbuf);
 
@@ -714,15 +734,25 @@ usage:
         {
             /* update the status line every second */
 
-            printf( "\33[KRead %lu packets\tDecrypt %lu packets\r", stats.nb_read, stats.nb_unwpa );
+            if (opt.crypt == CRYPT_WPA)
+                printf( "\33[KRead %lu packets\tDecrypt WPA %lu packets\r", stats.nb_read, stats.nb_unwpa );
+            else if (opt.crypt == CRYPT_WEP)
+                printf( "\33[KRead %lu packets\tDecrypt WEP %lu packets\r", stats.nb_read, stats.nb_unwpa );
+            else
+                printf( "\33[KRead %lu packets\tPlain %lu packets\r", stats.nb_read, stats.nb_plain );
+
             fflush( stdout );
             tt = time( NULL );
         }
 
         /* read one packet */
 
-        if ( pcap_next_ex(handle, &pkh, &data) < 0 )
-            err_pcap(handle, "pcap_next_ex error");
+        if ( pcap_next_ex(handle, &pkh, &data) < 0 ) {
+            if (opt.decrypt_file == 1)
+                break;
+            else
+                err_pcap(handle, "pcap_next_ex error");
+        }
 
         stats.nb_read++;
 
@@ -1101,12 +1131,20 @@ usage:
 
 
     pcap_close(handle);
-    fclose( f_out );
+    pcap_close(out_handle);
     if(opt.store_bad)
         fclose( f_bad );
 
     /* write some statistics */
-
+    printf( "\33[KTotal number of packets read      %8lu\n"
+                 "Total number of WEP data packets  %8lu\n"
+                 "Total number of WPA data packets  %8lu\n"
+                 "Number of plaintext data packets  %8lu\n"
+                 "Number of decrypted WEP  packets  %8lu\n"
+                 "Number of corrupted WEP  packets  %8lu\n"
+                 "Number of decrypted WPA  packets  %8lu\n",
+            stats.nb_read, stats.nb_wep, stats.nb_wpa,
+            stats.nb_plain, stats.nb_unwep, stats.nb_bad, stats.nb_unwpa );
 
     return( 0 );
 }
