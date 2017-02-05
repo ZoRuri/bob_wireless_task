@@ -34,6 +34,11 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->statusBar->addWidget(iLabel, 10);
     ui->statusBar->addWidget(statusLabel, 10);
     ui->statusBar->addWidget(channelLabel, 10);
+
+    ui->treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
+
+    connect(ui->treeWidget, &QTreeWidget::customContextMenuRequested, this, &MainWindow::contextMenu);
+
 }
 
 MainWindow::~MainWindow()
@@ -193,4 +198,60 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
     } // End Loop
 
 }
+
+void MainWindow::contextMenu( const QPoint & pos )
+{
+    QTreeWidget *tree = ui->treeWidget;
+
+    QTreeWidgetItem *item = tree->itemAt(pos);
+
+    qDebug() << pos << item->text(0) << item->parent();
+
+    QAction *sendDeauth = new QAction(tr("Send Deauthentication packet"), this);
+    QAction *eapolInfo = new QAction(this);
+
+    QSignalMapper *signalMapper = new QSignalMapper(this);
+
+    /* Parent item (AP) */
+    if (item->parent() == nullptr) {
+        connect(sendDeauth, SIGNAL(triggered()), signalMapper, SLOT(map()));
+
+        QString deauthInfo = "%1 %2 %3";
+        deauthInfo = deauthInfo.arg(item->text(9), "FF:FF:FF:FF:FF:FF", item->text(5));
+
+        signalMapper->setMapping(sendDeauth, deauthInfo);
+
+        connect(signalMapper, SIGNAL(mapped(QString)), this, SLOT(send_deauth(QString)));
+    } else {
+    /* Child item (STA) */
+        connect(sendDeauth, SIGNAL(triggered()), signalMapper, SLOT(map()));
+
+        QString deauthInfo = "%1 %2 %3";
+        deauthInfo = deauthInfo.arg(item->parent()->text(9), item->text(9), item->text(5));
+
+        signalMapper->setMapping(sendDeauth, deauthInfo);
+
+        connect(signalMapper, SIGNAL(mapped(QString)), this, SLOT(send_deauth(QString)));
+    }
+
+    QMenu menu(this);
+    menu.addAction(sendDeauth);
+    menu.addAction("EAPOL information");
+    menu.addAction("EAPOL2 information");
+    menu.addAction("EAPOL3 information");
+
+    QPoint point(pos);
+    menu.exec(tree->mapToGlobal(pos));
+}
+
+void MainWindow::send_deauth(QString deauthInfo)
+{
+    QStringList info = deauthInfo.split(" ");
+
+    sendDialog.setData(info.value(0), info.value(1), info.value(2).toInt(), iLabel->text());
+
+    sendDialog.setModal(true);
+    sendDialog.exec();
+}
+
 

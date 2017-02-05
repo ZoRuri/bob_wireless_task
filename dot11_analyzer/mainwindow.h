@@ -7,8 +7,11 @@
 #include <QTimer>
 #include <QTreeWidgetItem>
 #include <QLabel>
+#include <QPoint>
+#include <QSignalMapper>
 
 #include "interfacedialog.h"
+#include "senddialog.h"
 #include "capture.h"
 
 namespace Ui {
@@ -38,10 +41,15 @@ private slots:
 
     void on_actionClear_triggered();
 
+    void contextMenu(const QPoint & pos);
+
+    void send_deauth(QString deauthInfo);
+
 private:
     Ui::MainWindow *ui;
 
     InterfaceDialog interfaceDialog;
+    SendDialog sendDialog;
 
     Capture capture;
     QThread captureThread;

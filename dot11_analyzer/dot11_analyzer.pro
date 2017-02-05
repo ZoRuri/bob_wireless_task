@@ -19,14 +19,17 @@ CONFIG += console c++11
 SOURCES += main.cpp\
         mainwindow.cpp \
     capture.cpp \
-    interfacedialog.cpp
+    interfacedialog.cpp \
+    senddialog.cpp
 
 HEADERS  += mainwindow.h \
     capture.h \
-    interfacedialog.h
+    interfacedialog.h \
+    senddialog.h
 
 FORMS    += mainwindow.ui \
-    interfacedialog.ui
+    interfacedialog.ui \
+    senddialog.ui
 
 RESOURCES += \
     icon_image/icon_image.qrc

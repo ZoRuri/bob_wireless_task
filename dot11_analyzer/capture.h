@@ -104,7 +104,7 @@ private:
     unordered_map <int, string> cipher_LUT = {
        {PAIRWISE_FLAGS_CCMP, "CCMP"}, {PAIRWISE_FLAGS_TKIP, "TKIP"},
        {PAIRWISE_FLAGS_WEP40, "WEP-40"}, {PAIRWISE_FLAGS_WEP104, "WEP-104"},
-       {PAIRWISE_FLAGS_CCMP | PAIRWISE_FLAGS_TKIP, "CCMP"},
+       {PAIRWISE_FLAGS_CCMP | PAIRWISE_FLAGS_TKIP, "MIXED"},
     };
 
 public slots:
