@@ -26,8 +26,8 @@ void Capture::run()
         try {
             const RadioTap &radiotap = packet->rfind_pdu<RadioTap>();
 
-            //if (radiotap.present() & RadioTap::TSTF)
-               // clog << "timestamp: " << radiotap.tsft() << endl;
+            if (radiotap.present() & RadioTap::TSTF)
+                capInfo.timestamp = radiotap.tsft();
 
             if (radiotap.present() & RadioTap::DBM_SIGNAL)
                 capInfo.signal = (int)radiotap.dbm_signal();
@@ -36,7 +36,6 @@ void Capture::run()
             clog << "not radiotap packet" << endl;
             continue;
         }
-
 
         try {
             const Dot11 &dot11 = packet->rfind_pdu<Dot11>();
@@ -118,7 +117,10 @@ void Capture::dot11_data_frame(PDU *packet, captureInfo *capInfo)
 
     dot11_get_addr(packet, Dot11::DATA, capInfo);
 
-    //const Dot11Data &data = packet->rfind_pdu<Dot11Data>();
+    /* if QoS Data (EAPOL is on QoS Data packet) */
+    if (dot11.subtype() & Dot11::QOS_DATA_DATA) {
+        eapol_handshake(packet, capInfo);
+    }
 
     save_CaptureInfo(capInfo);
 }
@@ -266,7 +268,58 @@ void Capture::dot11_get_addr(PDU *packet, int type, captureInfo *capInfo)
 
 }
 
-void Capture::save_CaptureInfo(captureInfo *capInfo) {
+void Capture::eapol_handshake(PDU *packet, captureInfo *capInfo)
+{
+    const RSNEAPOL *eapol = packet->find_pdu<RSNEAPOL>();
+
+    if (eapol == nullptr)
+        return;
+
+    capInfo->type = FC_DATA_EAPOL;
+
+    /* Get EAPOL's flags */
+    u_int keyType = (u_int)eapol->key_t();
+    u_int keyAck  = (u_int)eapol->key_ack() * 2;
+    u_int keyMic  = (u_int)eapol->key_mic() * 4;
+    u_int install = (u_int)eapol->install() * 8;
+
+    u_int keyInfo = keyType | keyAck | keyMic | install;
+
+    EAPOLinfo EAPOL;
+
+    switch(keyInfo & EAPOL_MASK) {
+        /* EAPOL Handshake 1 of 4 */
+        case EAPOL_KEY_1:
+            capInfo->anonce = HexToString(eapol->nonce(), RSNEAPOL::nonce_size);
+            capInfo->eapolFlag = EAPOL_FLAG_ANONCE;
+            break;
+
+        case EAPOL_KEY_2_4:
+            if (eapol->wpa_length()) {
+                /* EAPOL Handshake 2 of 4 */
+                capInfo->snonce = HexToString(eapol->nonce(), RSNEAPOL::nonce_size);
+                capInfo->eapolFlag = EAPOL_FLAG_SNONCE;
+            } else {
+                /* EAPOL Handshake 4 of 4 */
+                capInfo->mic = HexToString(eapol->mic(), RSNEAPOL::mic_size);
+                capInfo->eapolFlag = EAPOL_FLAG_MIC;
+            }
+            break;
+
+        /* EAPOL Handshake 3 of 4 */
+        case EAPOL_KEY_3:
+            capInfo->anonce = HexToString(eapol->nonce(), RSNEAPOL::nonce_size);
+            capInfo->eapolFlag = EAPOL_FLAG_ANONCE;
+            break;
+
+        default:
+            clog << "wrong eapol" << endl;
+            break;
+    }
+}
+
+void Capture::save_CaptureInfo(captureInfo *capInfo)
+{
     /* Broadcast || Multicast*/
     if (capInfo->BSSID.find("ff:ff:ff:ff:ff:ff") != string::npos
             || capInfo->STAmac.find("01:00:5e") == 0
@@ -340,7 +393,7 @@ void Capture::save_CaptureInfo(captureInfo *capInfo) {
                     for(; STAsearch != STA_hashmap.end(); ++STAsearch) {
                         if (STAsearch->second.STAmac == capInfo->STAmac) {
                             STAsearch->second.dataCount = STAsearch->second.dataCount + 1;
-                            STA.signal = capInfo->signal;
+                            STAsearch->second.signal = capInfo->signal;
                             return;
                         }
                     } // End station search loop
@@ -354,6 +407,58 @@ void Capture::save_CaptureInfo(captureInfo *capInfo) {
                 }
 
             } // End station data
+
+            break;
+        }
+
+        case FC_DATA_EAPOL:
+        {
+            auto EAPOLsearch = EAPOL_hashmap.find(capInfo->BSSID);
+
+            EAPOLinfo EAPOL;
+
+            if (EAPOLsearch == EAPOL_hashmap.end()) {   /* First EAPOL info in AP */
+
+                insertEAPOL(&EAPOL, capInfo);
+
+                EAPOL.STAmac = capInfo->STAmac;
+                EAPOL.status |= capInfo->eapolFlag;
+
+                EAPOL.timestamp = capInfo->timestamp;   /* radiotap mac time */
+
+                EAPOL_hashmap.insert(pair<string, EAPOLinfo>(capInfo->BSSID, EAPOL));
+
+                clog << EAPOL.mic << " " << EAPOL.anonce << " " << EAPOL.snonce << endl;
+
+            } else {    /* Others */
+                for (; EAPOLsearch != EAPOL_hashmap.end(); ++EAPOLsearch) {
+                    if (EAPOLsearch->second.STAmac == capInfo->STAmac) {
+
+                        /* if new EAPOL handshake */
+                        if ( 250000 < (capInfo->timestamp - EAPOLsearch->second.timestamp) ) {
+                            EAPOLsearch->second.snonce = "";
+                            EAPOLsearch->second.anonce = "";
+                            EAPOLsearch->second.mic = "";
+                            EAPOLsearch->second.status = 0;
+                        }
+
+                        insertEAPOL(&EAPOLsearch->second, capInfo);
+                        EAPOLsearch->second.timestamp = capInfo->timestamp;
+                        EAPOLsearch->second.status = EAPOLsearch->second.status | capInfo->eapolFlag;
+
+                        return;
+                    }
+                } // End loop
+
+                insertEAPOL(&EAPOL, capInfo);
+
+                EAPOL.status = capInfo->eapolFlag;
+                EAPOL.STAmac = capInfo->STAmac;
+
+                EAPOL.timestamp = capInfo->timestamp;   /* radiotap mac time */
+
+                EAPOL_hashmap.insert(pair<string, EAPOLinfo>(capInfo->BSSID, EAPOL));
+            }
 
             break;
         }

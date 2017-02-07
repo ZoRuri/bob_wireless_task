@@ -12,7 +12,21 @@
 
 #include "interfacedialog.h"
 #include "senddialog.h"
+#include "eapoldialog.h"
+
 #include "capture.h"
+
+#define COLUMN_ESSID        0
+#define COLUMN_STACOUNT     1
+#define COLUMN_SIGNAL       2
+#define COLUMN_BEACON       3
+#define COLUMN_DATA         4
+#define COLUMN_CHANNEL      5
+#define COLUMN_ENCRYPTION   6
+#define COLUMN_CIPHER       7
+#define COLUMN_AUTH         8
+#define COLUMN_EAPOL        9
+#define COLUMN_BSSID       10
 
 namespace Ui {
 class MainWindow;
@@ -45,11 +59,14 @@ private slots:
 
     void send_deauth(QString deauthInfo);
 
+    void eapol_information(QString eapolData);
+
 private:
     Ui::MainWindow *ui;
 
     InterfaceDialog interfaceDialog;
-    SendDialog sendDialog;
+    SendDialog      sendDialog;
+    EAPOLDialog     eapolDialog;
 
     Capture capture;
     QThread captureThread;
@@ -64,6 +81,16 @@ private:
 
     int channel = 1;
     char command[30];
+
+    inline string getStatus(int status) {
+        if (status == EAPOL_STATUS_NULL)
+            return "NULL";
+        else if (status == EAPOL_STATUS_COMPLETE)
+            return "Compl.";
+        else
+            return "Imcompl.";
+
+    }
 };
 
 #endif // MAINWINDOW_H

@@ -7,6 +7,8 @@ SendDialog::SendDialog(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    this->setWindowTitle("Send deauth");
+
     pcap_findalldevs(&alldevsp, errbuf);
 
     for(dev = alldevsp; dev ; dev = dev->next)

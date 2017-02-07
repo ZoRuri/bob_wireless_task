@@ -20,16 +20,19 @@ SOURCES += main.cpp\
         mainwindow.cpp \
     capture.cpp \
     interfacedialog.cpp \
-    senddialog.cpp
+    senddialog.cpp \
+    eapoldialog.cpp
 
 HEADERS  += mainwindow.h \
     capture.h \
     interfacedialog.h \
-    senddialog.h
+    senddialog.h \
+    eapoldialog.h
 
 FORMS    += mainwindow.ui \
     interfacedialog.ui \
-    senddialog.ui
+    senddialog.ui \
+    eapoldialog.ui
 
 RESOURCES += \
     icon_image/icon_image.qrc

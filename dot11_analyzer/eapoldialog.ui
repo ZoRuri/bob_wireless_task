@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>EAPOLDialog</class>
+ <widget class="QDialog" name="EAPOLDialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>770</width>
+    <height>577</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_2">
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout">
+     <item>
+      <widget class="QLabel" name="label_bssid">
+       <property name="text">
+        <string>BSSID : </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_essid">
+       <property name="text">
+        <string>SSID : </string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_eapolCount">
+       <property name="text">
+        <string>Handshake Count :</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTreeWidget" name="treeWidget">
+     <column>
+      <property name="text">
+       <string>MAC Address</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Anonce</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Snonce</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>MIC</string>
+      </property>
+     </column>
+     <column>
+      <property name="text">
+       <string>Last Update</string>
+      </property>
+     </column>
+    </widget>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

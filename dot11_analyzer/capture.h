@@ -29,6 +29,31 @@ using namespace std;
 #define FC_MGT_PROBERESP    0x05
 #define FC_MGT_BEACON       0x08
 
+#define FC_DATA_EAPOL       0x2F
+
+/* Define for pairwise key type */
+#define PAIRWISE_FLAGS_CCMP 1
+#define PAIRWISE_FLAGS_TKIP 2
+#define PAIRWISE_FLAGS_WEP40 4
+#define PAIRWISE_FLAGS_WEP104 8
+
+#define PAIRWISE_FLAGS_MASK 15
+
+/* Define for EAPOL 4 way handshake */
+#define EAPOL_MASK      15
+#define EAPOL_KEY_1     0b0011
+#define EAPOL_KEY_2_4   0b0101
+#define EAPOL_KEY_3     0b1111
+
+/* Define for EAPOL info status */
+#define EAPOL_STATUS_NULL       0
+//#define EAPOL_STATUS_IMCOMPLETE 2
+#define EAPOL_STATUS_COMPLETE   7
+
+#define EAPOL_FLAG_MIC    1
+#define EAPOL_FLAG_SNONCE 2
+#define EAPOL_FLAG_ANONCE 4
+
 struct captureInfo {
     string BSSID;
     int8_t signal;
@@ -39,6 +64,13 @@ struct captureInfo {
     string encryption = "OPEN";
     string cipher;
     string auth;
+    /* EAPOL */
+    uint64_t timestamp;
+    uint eapolFlag = 0;
+    int    keyVer;
+    string snonce;
+    string anonce;
+    string mic;
 };
 
 struct APinfo {
@@ -59,12 +91,15 @@ struct STAinfo {
     int dataCount = 0;
 };
 
-#define PAIRWISE_FLAGS_CCMP 1
-#define PAIRWISE_FLAGS_TKIP 2
-#define PAIRWISE_FLAGS_WEP40 4
-#define PAIRWISE_FLAGS_WEP104 8
-
-#define PAIRWISE_FLAGS_MASK 15
+struct EAPOLinfo {
+    string STAmac;
+    uint   status = 0;
+    int    keyVer;
+    string snonce;
+    string anonce;
+    string mic;
+    uint64_t timestamp;
+};
 
 class Capture : public QObject
 {
@@ -80,6 +115,8 @@ public:
     unordered_map <string, APinfo> AP_hashmap;
     unordered_multimap <string, STAinfo> STA_hashmap;
 
+    unordered_multimap <string, EAPOLinfo> EAPOL_hashmap;
+
 private:
     void dot11_mgt_frame(PDU *packet, captureInfo *capInfo);
     void dot11_ctl_frame(PDU *packet, captureInfo *capInfo);
@@ -89,6 +126,34 @@ private:
     void dot11_get_addr(PDU *packet, int type, captureInfo *capInfo);
 
     inline int DS_status(const Dot11 &dot11) { return dot11.from_ds() * 2 + dot11.to_ds(); }
+
+    inline string HexToString(const uint8_t *hexArray, int size) {
+        string output;
+        char temp[2];
+
+        for (int i = 0; i < size; ++i) {
+            sprintf(temp, "%02x", hexArray[i]);
+            output.append(temp);
+        }
+
+        return output;
+    }
+
+    inline void insertEAPOL(EAPOLinfo *eapolInfo, captureInfo *capInfo)
+    {
+        clog << "flag: " << capInfo->eapolFlag << endl;
+
+        if ( capInfo->eapolFlag & EAPOL_FLAG_ANONCE )
+            eapolInfo->anonce = capInfo->anonce;
+
+        if ( capInfo->eapolFlag & EAPOL_FLAG_SNONCE )
+            eapolInfo->snonce = capInfo->snonce;
+
+        if ( capInfo->eapolFlag & EAPOL_FLAG_MIC )
+            eapolInfo->mic = capInfo->mic;
+    }
+
+    void eapol_handshake(PDU *packet, captureInfo *capInfo);
 
     void save_CaptureInfo(captureInfo *capInfo);
 

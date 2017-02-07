@@ -79,6 +79,11 @@
       </column>
       <column>
        <property name="text">
+        <string>EAPOL</string>
+       </property>
+      </column>
+      <column>
+       <property name="text">
         <string>BSSID</string>
        </property>
       </column>
