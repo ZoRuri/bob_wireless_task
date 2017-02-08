@@ -4,10 +4,12 @@
 #include <QDebug>
 #include <QObject>
 
-#include <iostream>
 #include <tins/tins.h>
+
+#include <iostream>
 #include <thread>
 #include <unistd.h>
+#include <time.h>
 
 #include <unordered_map>
 
@@ -98,6 +100,7 @@ struct EAPOLinfo {
     string snonce;
     string anonce;
     string mic;
+    string updateTime;
     uint64_t timestamp;
 };
 

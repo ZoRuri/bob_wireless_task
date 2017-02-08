@@ -86,9 +86,9 @@ private:
         if (status == EAPOL_STATUS_NULL)
             return "NULL";
         else if (status == EAPOL_STATUS_COMPLETE)
-            return "Compl.";
+            return "Complete";
         else
-            return "Imcompl.";
+            return "Incomplete";
 
     }
 };

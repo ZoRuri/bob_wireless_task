@@ -25,7 +25,7 @@ public:
 
     void setLabel(QString BSSID, QString ESSID, int EAPOLcount);
 
-    void setItem(string STAmac, string anonce, string snonce, string mic);
+    void setItem(string STAmac, string anonce, string snonce, string mic, string updateTime);
 
     void itemClear();
 

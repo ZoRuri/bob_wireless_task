@@ -20,7 +20,7 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->treeWidget->header()->resizeSection(COLUMN_BSSID, 120);    /* BSSID */
 
     connect(&captureThread, SIGNAL(started()), &capture, SLOT(run()));
-    connect(&timer, SIGNAL(timeout()), this, SLOT(channel_loop()));
+    //connect(&timer, SIGNAL(timeout()), this, SLOT(channel_loop()));
     connect(&timer, SIGNAL(timeout()), this, SLOT(AP_Information()) );
 
     iLabel = new QLabel(this);
@@ -130,17 +130,17 @@ void MainWindow::AP_Information()
         if (item.count() == 0) {
             QTreeWidgetItem* itemInfo = new QTreeWidgetItem(ui->treeWidget);
 
-            itemInfo->setText(0, QString::fromStdString(it.second.SSID));
-            itemInfo->setText(1, QString::number(capture.STA_hashmap.count(it.first)));
-            itemInfo->setText(2, QString::number(it.second.signal));
-            itemInfo->setText(3, QString::number(it.second.beaconCount));
-            itemInfo->setText(4, QString::number(it.second.dataCount));
-            itemInfo->setText(5, QString::number(it.second.channel));
-            itemInfo->setText(6, QString::fromStdString(it.second.encryption));
-            itemInfo->setText(7, QString::fromStdString(it.second.cipher));
-            itemInfo->setText(8, QString::fromStdString(it.second.auth));
-
-            itemInfo->setText(10, QString::fromStdString(it.first).toUpper());
+            itemInfo->setText(COLUMN_ESSID, QString::fromStdString(it.second.SSID));
+            itemInfo->setText(COLUMN_STACOUNT, QString::number(capture.STA_hashmap.count(it.first)));
+            itemInfo->setText(COLUMN_SIGNAL, QString::number(it.second.signal));
+            itemInfo->setText(COLUMN_BEACON, QString::number(it.second.beaconCount));
+            itemInfo->setText(COLUMN_DATA, QString::number(it.second.dataCount));
+            itemInfo->setText(COLUMN_CHANNEL, QString::number(it.second.channel));
+            itemInfo->setText(COLUMN_ENCRYPTION, QString::fromStdString(it.second.encryption));
+            itemInfo->setText(COLUMN_CIPHER, QString::fromStdString(it.second.cipher));
+            itemInfo->setText(COLUMN_AUTH, QString::fromStdString(it.second.auth));
+            itemInfo->setText(COLUMN_EAPOL, QString::number(capture.EAPOL_hashmap.count(it.first)));
+            itemInfo->setText(COLUMN_BSSID, QString::fromStdString(it.first).toUpper());
 
 
         } else {    /* Tree widget item is exist */
@@ -155,6 +155,7 @@ void MainWindow::AP_Information()
             itemInfo->setText(6, QString::fromStdString(it.second.encryption));
             itemInfo->setText(7, QString::fromStdString(it.second.cipher));
             itemInfo->setText(8, QString::fromStdString(it.second.auth));
+            itemInfo->setText(COLUMN_EAPOL, QString::number(capture.EAPOL_hashmap.count(it.first)));
 
             STA_Information(it.first, itemInfo);
 
@@ -165,6 +166,23 @@ void MainWindow::AP_Information()
 
 void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
 {
+
+    auto eapolRange = capture.EAPOL_hashmap.equal_range(BSSID);
+
+    for (auto it = eapolRange.first; it != eapolRange.second ; ++it) {
+        QList<QTreeWidgetItem *> STAitem = ui->treeWidget->findItems(QString::fromStdString(it->second.STAmac),
+                                                                     Qt::MatchRecursive | Qt::MatchFixedString, 10);
+
+        if (STAitem.count() == 0) {
+            ;
+        } else {
+            QTreeWidgetItem *itemInfo = STAitem[0];
+
+            itemInfo->setText(COLUMN_EAPOL, QString::fromStdString(getStatus(it->second.status)));
+
+        }
+    }
+
     auto range = capture.STA_hashmap.equal_range(BSSID);
 
     for (auto it = range.first; it != range.second ; ++it) {
@@ -172,7 +190,7 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
                                                                      Qt::MatchRecursive | Qt::MatchFixedString, 10);
 
         if (STAitem.count() == 0) { // New station
-            QTreeWidgetItem* itemInfo = new QTreeWidgetItem(parentItem);
+            QTreeWidgetItem *itemInfo = new QTreeWidgetItem(parentItem);
 
             itemInfo->setText(0, QString("STA %1").arg(parentItem->childCount()));
             itemInfo->setText(1, "-");
@@ -258,8 +276,6 @@ void MainWindow::contextMenu( const QPoint & pos )
         connect(signalMapper2, SIGNAL(mapped(QString)), this, SLOT(eapol_information(QString)));
     }
 
-    //connect(eapolInfo, SIGNAL(triggered()), this, SLOT(eapol_information()));
-
     QMenu menu(this);
     menu.addAction(sendDeauth);
     menu.addAction(eapolInfo);
@@ -291,28 +307,9 @@ void MainWindow::eapol_information(QString eapolData)
     for(auto itemList = range.first ;itemList != range.second; ++itemList)
     {
         eapolDialog.setItem(itemList->second.STAmac, itemList->second.anonce,
-                            itemList->second.snonce, itemList->second.mic);
+                            itemList->second.snonce, itemList->second.mic,
+                            itemList->second.updateTime);
     }
-
-//    for (const auto& it : capture.EAPOL_hashmap)
-//    {
-//        auto it2 = capture.EAPOL_hashmap.equal_range(it.first);
-
-//        clog << "====ap====" << endl;
-//        clog <<  it.first << endl;
-
-//        for (auto it3 = it2.first; it3 != it2.second ; ++it3)
-//        {
-//            clog << "---------" << endl;
-//            clog << it3->second.STAmac << endl;
-//            clog << it3->second.snonce << endl;
-//            clog << it3->second.anonce << endl;
-//            clog << it3->second.mic << endl;
-//            clog << it3->second.status << endl;
-//            clog << it3->second.timestamp << endl;
-
-//        }
-//    }
 
     eapolDialog.setModal(true);
     eapolDialog.exec();

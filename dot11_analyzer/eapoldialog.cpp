@@ -22,7 +22,7 @@ void EAPOLDialog::setLabel(QString BSSID, QString ESSID, int EAPOLcount)
     ui->label_eapolCount->setText(QString("Handshake Count : %1").arg(EAPOLcount));
 }
 
-void EAPOLDialog::setItem(string STAmac, string anonce, string snonce, string mic)
+void EAPOLDialog::setItem(string STAmac, string anonce, string snonce, string mic, string updateTime)
 {
     QTreeWidgetItem *itemInfo = new QTreeWidgetItem(ui->treeWidget);
 
@@ -30,6 +30,7 @@ void EAPOLDialog::setItem(string STAmac, string anonce, string snonce, string mi
     itemInfo->setText(1, QString::fromStdString(anonce));
     itemInfo->setText(2, QString::fromStdString(snonce));
     itemInfo->setText(3, QString::fromStdString(mic));
+    itemInfo->setText(4, QString::fromStdString(updateTime));
 
 
 //    auto itemList = capture.EAPOL_hashmap.find(BSSID);

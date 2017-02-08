@@ -413,6 +413,17 @@ void Capture::save_CaptureInfo(captureInfo *capInfo)
 
         case FC_DATA_EAPOL:
         {
+            /* For update time */
+            time_t now = time(NULL);
+
+            struct tm tstruct;
+            char buf[20];
+
+            tstruct = *localtime(&now);
+
+            strftime(buf, sizeof(buf), "%Y-%m-%d %I:%M:%S", &tstruct);
+            string updateTime(buf);
+
             auto EAPOLsearch = EAPOL_hashmap.find(capInfo->BSSID);
 
             EAPOLinfo EAPOL;
@@ -423,6 +434,7 @@ void Capture::save_CaptureInfo(captureInfo *capInfo)
 
                 EAPOL.STAmac = capInfo->STAmac;
                 EAPOL.status |= capInfo->eapolFlag;
+                EAPOL.updateTime = updateTime;
 
                 EAPOL.timestamp = capInfo->timestamp;   /* radiotap mac time */
 
@@ -443,6 +455,8 @@ void Capture::save_CaptureInfo(captureInfo *capInfo)
                         }
 
                         insertEAPOL(&EAPOLsearch->second, capInfo);
+
+                        EAPOLsearch->second.updateTime = updateTime;
                         EAPOLsearch->second.timestamp = capInfo->timestamp;
                         EAPOLsearch->second.status = EAPOLsearch->second.status | capInfo->eapolFlag;
 
@@ -454,6 +468,7 @@ void Capture::save_CaptureInfo(captureInfo *capInfo)
 
                 EAPOL.status = capInfo->eapolFlag;
                 EAPOL.STAmac = capInfo->STAmac;
+                EAPOL.updateTime = updateTime;
 
                 EAPOL.timestamp = capInfo->timestamp;   /* radiotap mac time */
 
