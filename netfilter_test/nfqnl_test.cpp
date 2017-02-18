@@ -13,13 +13,17 @@
 #include <netinet/tcp.h>
 
 #include <iostream>
+#include <bitset>
+#include <set>
 
 #include <string.h>
 
-//void http_request_parser();
-
 #define HTTP_FILED_NAME  1
 #define HTTP_FILED_VALUE 2
+
+#define NOT_HTTP_PACKET    0
+#define HTTP_FILTER_PERMIT 1
+#define HTTP_FILTER_DENY   2
 
 using namespace std;
 
@@ -36,6 +40,96 @@ typedef struct HTTP_Request_Header {
     struct HTTP_Filed filed;
 }HTTP_Request_Header;
 
+set<string> domain;
+
+uint16_t get_IP_checksum(unsigned char *buf) {
+    struct iphdr *ipHeader = (struct iphdr *)buf;
+
+    int len = (ipHeader->ihl * 4);
+
+    ipHeader->check = 0x0000;
+
+    uint32_t ipChecksum = 0;
+
+    for (int i = 0; i < len; ++i) {
+        if (i & 1)
+            ipChecksum += buf[i];
+        else
+            ipChecksum += (buf[i] << 8);
+    }
+
+    do {
+        ipChecksum += ipChecksum >> 16;
+        ipChecksum &= 0xffff;
+    } while(ipChecksum > 0xffff);
+
+    return (uint16_t)ipChecksum ^ 65535;
+}
+
+uint16_t get_TCP_checksum(unsigned char *buf) {
+    struct iphdr *ipHeader = (struct iphdr *)buf;
+    struct tcphdr *tcpHeader = (struct tcphdr *)(buf + ipHeader->ihl * 4);
+
+    int segmentLen = ntohs(ipHeader->tot_len) - ipHeader->ihl * 4;
+
+    tcpHeader->check = 0x0000;
+
+    /* Pseudo Header */
+    uint32_t pseudoSum = 0;
+
+    pseudoSum += (ntohl(ipHeader->saddr) >> 16) + (ntohl(ipHeader->saddr) & 0xffff);
+    pseudoSum += (ntohl(ipHeader->daddr) >> 16) + (ntohl(ipHeader->daddr) & 0xffff);
+    pseudoSum += ipHeader->protocol;    // reserved (always 0) + protocol
+    pseudoSum += segmentLen;            // TCP header length + data length
+
+    /* TCP Segment */
+    uint32_t segmentSum = 0;
+
+    int totLen = ntohs(ipHeader->tot_len);
+    int ihl = ipHeader->ihl * 4;
+
+    for (int i = ihl; i < totLen; ++i) {
+        if (i & 1)
+            segmentSum += buf[i];
+        else
+            segmentSum += (buf[i] << 8);
+    }
+
+    /* Checksum */
+    uint32_t checksum = 0;
+
+    checksum = pseudoSum + segmentSum;
+
+    do {
+        checksum += checksum >> 16;
+        checksum &= 0xffff;
+    } while(checksum > 0xffff);
+
+    return (uint16_t)checksum ^ 65535;
+}
+
+void rule_parser(const char *filename) {
+    FILE *fp;
+    char str[1024];
+
+    string temp = "";
+
+    if ( fp = fopen(filename, "r") )
+    {
+        while ( fread(str, 1, 1, fp) ) {
+            if ( strcmp(str, "\n") == 0 ) {
+                domain.insert(temp);
+                temp = "";
+            } else {
+                temp.append(str);
+            }
+        }
+
+        fclose(fp);
+    }
+
+}
+
 int HTTP_field_parser(u_char *buf, HTTP_Request_Header *reqHeader, int len) {
     reqHeader->filed.name = "";
     reqHeader->filed.value = "";
@@ -46,12 +140,12 @@ int HTTP_field_parser(u_char *buf, HTTP_Request_Header *reqHeader, int len) {
 
     for (i = 0; i < len; ++i)
     {
-        if( buf[i] == '\r' && buf[i + 1] == '\n' )  {
+        if (buf[i] == '\r' && buf[i + 1] == '\n')  {
             i += 2;
             break;
         }
 
-        if ( buf[i] == ':' && buf [i + 1] == ' ') {
+        if (buf[i] == ':' && buf [i + 1] == ' ') {
             i += 2;
             type = HTTP_FILED_VALUE;
         }
@@ -65,7 +159,7 @@ int HTTP_field_parser(u_char *buf, HTTP_Request_Header *reqHeader, int len) {
     return i;
 }
 
-void dump(unsigned char *buf, int len) {
+int HTTP_filter(unsigned char *buf, int len) {
     struct iphdr *ipHeader = (struct iphdr *)buf;
     struct tcphdr *tcpHeader = (struct tcphdr *)(buf + ipHeader->ihl * 4);
 
@@ -107,100 +201,95 @@ void dump(unsigned char *buf, int len) {
             clog << "len " << len << " " << offset << endl;
             //clog << "name : " << reqHeader.filed.name << "value: " << reqHeader.filed.value << endl;
 
-            if (strcmp("Host", reqHeader.filed.name.c_str()) == 0)
-                clog << reqHeader.filed.value << endl;
+            if (strcmp("Host", reqHeader.filed.name.c_str()) == 0 &&
+                    domain.find(reqHeader.filed.value) != domain.end()) {
+                clog << reqHeader.filed.name << " " << reqHeader.filed.value << endl;
+                return HTTP_FILTER_DENY;
+            }
 
             //printf("len: %d %d\n", len, offset);
         }
 
+        return HTTP_FILTER_PERMIT;
     }
 
-//    int i;
-
-//    for (i = 0; i < len; ++i) {
-//        if((i % 16) == 0)
-//            printf("\n");
-//        printf("%02X", buf[i]);
-//        printf(" ");
-//    }
-
     printf("\n");
+
+    return NOT_HTTP_PACKET;
 }
 
-/* returns packet id */
-static u_int32_t print_pkt (struct nfq_data *tb)
+static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
+	      struct nfq_data *nfa, void *data)
 {
-	int id = 0;
-	struct nfqnl_msg_packet_hdr *ph;
-	struct nfqnl_msg_packet_hw *hwph;
-	u_int32_t mark,ifi; 
-	int ret;
-	unsigned char *data;
+    u_int32_t id;
 
-    ph = nfq_get_msg_packet_hdr(tb);
+    int filterRet;
+
+    struct nfqnl_msg_packet_hdr *ph;
+
+    int ret;
+
+    unsigned char *buf;
+
+    ph = nfq_get_msg_packet_hdr(nfa);
     if (ph) {
         id = ntohl(ph->packet_id);
         printf("hw_protocol=0x%04x hook=%u id=%u ",
             ntohs(ph->hw_protocol), ph->hook, id);
     }
 
-    hwph = nfq_get_packet_hw(tb);
-    if (hwph) {
-        int i, hlen = ntohs(hwph->hw_addrlen);
-
-        printf("hw_src_addr=");
-        for (i = 0; i < hlen-1; i++)
-            printf("%02x:", hwph->hw_addr[i]);
-        printf("%02x ", hwph->hw_addr[hlen-1]);
-    }
-
-    mark = nfq_get_nfmark(tb);
-    if (mark)
-        printf("mark=%u ", mark);
-
-    ifi = nfq_get_indev(tb);
-    if (ifi)
-        printf("indev=%u ", ifi);
-
-    ifi = nfq_get_outdev(tb);
-    if (ifi)
-        printf("outdev=%u ", ifi);
-    ifi = nfq_get_physindev(tb);
-    if (ifi)
-        printf("physindev=%u ", ifi);
-
-    ifi = nfq_get_physoutdev(tb);
-    if (ifi)
-        printf("physoutdev=%u ", ifi);
-
-	ret = nfq_get_payload(tb, &data);
+    ret = nfq_get_payload(nfa, &buf);
     if (ret >= 0) {
-        dump(data, ret);
+        filterRet = HTTP_filter(buf, ret);
         printf("payload_len=%d ", ret);
     }
 
-	fputc('\n', stdout);
+    fputc('\n', stdout);
 
-	return id;
-}
-	
+    switch (filterRet) {
+        case HTTP_FILTER_PERMIT:
+            return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
 
-static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
-	      struct nfq_data *nfa, void *data)
-{
-	u_int32_t id = print_pkt(nfa);
-	printf("entering callback\n");
-	return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+        case HTTP_FILTER_DENY:
+        {
+            struct iphdr *ipHeader = (struct iphdr *)buf;
+            struct tcphdr *tcpHeader = (struct tcphdr *)(buf + ipHeader->ihl * 4);
+
+            ipHeader->daddr = 0x5239bd79;
+            ipHeader->check = ntohs(get_IP_checksum(buf));
+
+            tcpHeader->check = ntohs(get_TCP_checksum(buf));
+
+//            for (int i = 0; i < ret; ++i) {
+//                if((i % 16) == 0)
+//                    printf("\n");
+//                printf("%02X", buf[i]);
+//                printf(" ");
+//            }
+
+//            clog << "deny" << endl;
+            return nfq_set_verdict(qh, id, NF_ACCEPT, ret, buf);
+            //return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
+        }
+
+        default:
+            return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+    }
+
+//    return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+
 }
 
 int main(int argc, char **argv)
 {
-	struct nfq_handle *h;
+    struct nfq_handle *h;
 	struct nfq_q_handle *qh;
 	struct nfnl_handle *nh;
 	int fd;
 	int rv;
 	char buf[4096] __attribute__ ((aligned));
+
+    rule_parser(argv[1]);
 
 	printf("opening library handle\n");
 	h = nfq_open();
