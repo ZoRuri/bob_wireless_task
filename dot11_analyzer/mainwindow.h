@@ -15,6 +15,7 @@
 #include "eapoldialog.h"
 
 #include "capture.h"
+#include "sendpacket.h"
 
 #define COLUMN_ESSID        0
 #define COLUMN_STACOUNT     1
@@ -40,6 +41,9 @@ public:
     explicit MainWindow(QWidget *parent = 0);
     ~MainWindow();
 
+private:
+    void STA_Information(string BSSID, QTreeWidgetItem* parentItem);
+
 private slots:
     void on_actionInterface_triggered();
 
@@ -49,17 +53,17 @@ private slots:
 
     void channel_loop();
 
-    void AP_Information();
-
-    void STA_Information(string BSSID, QTreeWidgetItem* parentItem);
-
     void on_actionClear_triggered();
 
     void contextMenu(const QPoint & pos);
 
+    void AP_Information();
+
     void send_deauth(QString deauthInfo);
 
     void eapol_information(QString eapolData);
+
+    void eapol_deauth();
 
 private:
     Ui::MainWindow *ui;
@@ -70,6 +74,8 @@ private:
 
     Capture capture;
     QThread captureThread;
+
+    SendPacket sendPacket;
 
     QTimer timer;
 

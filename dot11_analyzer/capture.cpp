@@ -448,6 +448,9 @@ void Capture::save_CaptureInfo(captureInfo *capInfo)
                 } else {    /* Others */
                     for (; EAPOLsearch != EAPOL_hashmap.end(); ++EAPOLsearch) {
                         if (EAPOLsearch->second.STAmac == capInfo->STAmac) {
+                            /* if collect all EAPOL Handshake */
+                            if ( EAPOLsearch->second.status == EAPOL_STATUS_COMPLETE )
+                                return;
 
                             /* if new EAPOL handshake */
                             if ( 250000 < (capInfo->timestamp - EAPOLsearch->second.timestamp) ) {

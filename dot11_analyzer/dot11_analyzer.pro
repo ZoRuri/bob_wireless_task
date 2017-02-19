@@ -21,13 +21,15 @@ SOURCES += main.cpp\
     capture.cpp \
     interfacedialog.cpp \
     senddialog.cpp \
-    eapoldialog.cpp
+    eapoldialog.cpp \
+    sendpacket.cpp
 
 HEADERS  += mainwindow.h \
     capture.h \
     interfacedialog.h \
     senddialog.h \
-    eapoldialog.h
+    eapoldialog.h \
+    sendpacket.h
 
 FORMS    += mainwindow.ui \
     interfacedialog.ui \
