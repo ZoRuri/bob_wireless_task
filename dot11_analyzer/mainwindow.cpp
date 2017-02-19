@@ -141,7 +141,7 @@ void MainWindow::AP_Information()
             itemInfo->setText(COLUMN_ENCRYPTION, QString::fromStdString(it.second.encryption));
             itemInfo->setText(COLUMN_CIPHER, QString::fromStdString(it.second.cipher));
             itemInfo->setText(COLUMN_AUTH, QString::fromStdString(it.second.auth));
-            itemInfo->setText(COLUMN_EAPOL, QString::number(capture.EAPOL_hashmap.count(it.first)));
+            itemInfo->setText(COLUMN_EAPOL, QString::number(it.second.EAPOLcount));
             itemInfo->setText(COLUMN_BSSID, QString::fromStdString(it.first).toUpper());
 
 
@@ -157,7 +157,7 @@ void MainWindow::AP_Information()
             itemInfo->setText(COLUMN_ENCRYPTION, QString::fromStdString(it.second.encryption));
             itemInfo->setText(COLUMN_CIPHER, QString::fromStdString(it.second.cipher));
             itemInfo->setText(COLUMN_AUTH, QString::fromStdString(it.second.auth));
-            itemInfo->setText(COLUMN_EAPOL, QString::number(capture.EAPOL_hashmap.count(it.first)));
+            itemInfo->setText(COLUMN_EAPOL, QString::number(it.second.EAPOLcount));
 
             STA_Information(it.first, itemInfo);
 
@@ -168,23 +168,6 @@ void MainWindow::AP_Information()
 
 void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
 {
-
-    auto eapolRange = capture.EAPOL_hashmap.equal_range(BSSID);
-
-    for (auto it = eapolRange.first; it != eapolRange.second ; ++it) {
-        QList<QTreeWidgetItem *> STAitem = ui->treeWidget->findItems(QString::fromStdString(it->second.STAmac),
-                                                                     Qt::MatchRecursive | Qt::MatchFixedString, 10);
-
-        if (STAitem.count() == 0) {
-            ;
-        } else {
-            QTreeWidgetItem *itemInfo = STAitem[0];
-
-            itemInfo->setText(COLUMN_EAPOL, QString::fromStdString(getStatus(it->second.status)));
-
-        }
-    }
-
     auto range = capture.STA_hashmap.equal_range(BSSID);
 
     for (auto it = range.first; it != range.second ; ++it) {
@@ -194,24 +177,26 @@ void MainWindow::STA_Information(string BSSID, QTreeWidgetItem* parentItem)
         if (STAitem.count() == 0) { // New station
             QTreeWidgetItem *itemInfo = new QTreeWidgetItem(parentItem);
 
-            itemInfo->setText(0, QString("STA %1").arg(parentItem->childCount()));
-            itemInfo->setText(1, "-");
-            itemInfo->setText(2, QString::number(it->second.signal));
-            itemInfo->setText(3, "-");
-            itemInfo->setText(4, QString::number(it->second.dataCount));
-            itemInfo->setText(5, (parentItem->text(5)));
+            itemInfo->setText(COLUMN_ESSID, QString("STA %1").arg(parentItem->childCount()));
+            itemInfo->setText(COLUMN_STACOUNT, "-");
+            itemInfo->setText(COLUMN_SIGNAL, QString::number(it->second.signal));
+            itemInfo->setText(COLUMN_BEACON, "-");
+            itemInfo->setText(COLUMN_DATA, QString::number(it->second.dataCount));
+            itemInfo->setText(COLUMN_CHANNEL, (parentItem->text(5)));
 
-            itemInfo->setText(10, QString::fromStdString(it->second.STAmac).toUpper());
+            itemInfo->setText(COLUMN_EAPOL, QString::fromStdString(getStatus(it->second.eapol_status)));
+            itemInfo->setText(COLUMN_BSSID, QString::fromStdString(it->second.STAmac).toUpper());
 
 
         } else {
             QTreeWidgetItem* itemInfo = STAitem[0];
 
-            itemInfo->setText(2, QString::number(it->second.signal));
+            itemInfo->setText(COLUMN_SIGNAL, QString::number(it->second.signal));
 
-            itemInfo->setText(4, QString::number(it->second.dataCount));
+            itemInfo->setText(COLUMN_DATA, QString::number(it->second.dataCount));
 
-            itemInfo->setText(10, QString::fromStdString(it->second.STAmac).toUpper());
+            itemInfo->setText(COLUMN_EAPOL, QString::fromStdString(getStatus(it->second.eapol_status)));
+            itemInfo->setText(COLUMN_BSSID, QString::fromStdString(it->second.STAmac).toUpper());
 
         }
 
@@ -300,17 +285,19 @@ void MainWindow::eapol_information(QString eapolData)
 {
     QStringList data = eapolData.split(" ");
 
-    int eapolCount = capture.EAPOL_hashmap.count(data.value(0).toLower().toStdString());
+    int eapolCount = capture.AP_hashmap[data.value(0).toLower().toStdString()].EAPOLcount;
 
     eapolDialog.setLabel(data.value(0), data.value(1), eapolCount);
 
-    auto range = capture.EAPOL_hashmap.equal_range(data.value(0).toLower().toStdString());
+    auto range = capture.STA_hashmap.equal_range(data.value(0).toLower().toStdString());
 
     for(auto itemList = range.first ;itemList != range.second; ++itemList)
     {
-        eapolDialog.setItem(itemList->second.STAmac, itemList->second.anonce,
-                            itemList->second.snonce, itemList->second.mic,
-                            itemList->second.updateTime);
+        if (itemList->second.eapol_status != EAPOL_STATUS_NULL) {
+            eapolDialog.setItem(itemList->second.STAmac, itemList->second.eapol_anonce,
+                                itemList->second.eapol_snonce, itemList->second.eapol_mic,
+                                itemList->second.eapol_updateTime);
+        }
     }
 
     eapolDialog.setModal(true);
@@ -326,13 +313,21 @@ void MainWindow::eapol_deauth()
 
     QList<QTreeWidgetItem *> itemList = ui->treeWidget->findItems(ch, Qt::MatchExactly, COLUMN_CHANNEL);
 
+
     foreach( QTreeWidgetItem *item, itemList ) {
         auto range = capture.STA_hashmap.equal_range(item->text(COLUMN_BSSID).toLower().toStdString());
 
         for(auto eapolList = range.first; eapolList != range.second; ++eapolList)
         {
-            qDebug() << QString::fromStdString(eapolList->second.STAmac);
+            if (eapolList->second.eapol_status != EAPOL_STATUS_COMPLETE) {
+                sendPacket.sendDeauth(item->text(COLUMN_BSSID).toStdString(),
+                                      eapolList->second.STAmac, "wlan4", 10);
+            }
+            //qDebug() << QString::fromStdString(eapolList->second.STAmac);
         }
+
+        qDebug() << item->text(COLUMN_BSSID) << QString::number(capture.AP_hashmap[item->text(COLUMN_BSSID).toLower().toStdString()].EAPOLcount);
+
 
         //qDebug() << ch << item->text(COLUMN_BSSID) << item->text(COLUMN_CHANNEL);
     }

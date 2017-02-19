@@ -90,7 +90,7 @@ private:
 
     inline string getStatus(int status) {
         if (status == EAPOL_STATUS_NULL)
-            return "NULL";
+            return "None";
         else if (status == EAPOL_STATUS_COMPLETE)
             return "Complete";
         else

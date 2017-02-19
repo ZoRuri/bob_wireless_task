@@ -80,6 +80,7 @@ struct captureInfo {
 struct APinfo {
     int8_t signal;
     int STAcount = 0;
+    int EAPOLcount = 0;
     int channel = 0;
     string SSID;
     int dataCount = 0;
@@ -92,18 +93,15 @@ struct APinfo {
 struct STAinfo {
     string STAmac;
     int8_t signal;
-    int dataCount = 0;
-};
+    int    dataCount = 0;
 
-struct EAPOLinfo {
-    string STAmac;
-    uint   status = 0;
-    int    keyVer;
-    string snonce;
-    string anonce;
-    string mic;
-    string updateTime;
-    uint64_t timestamp;
+    uint   eapol_status = 0;
+    int    eapol_keyVer;
+    string eapol_snonce;
+    string eapol_anonce;
+    string eapol_mic;
+    string eapol_updateTime;
+    uint64_t eapol_timestamp;
 };
 
 class Capture : public QObject
@@ -119,8 +117,6 @@ public:
     /* Key: BSSID, Value: Struct */
     unordered_map <string, APinfo> AP_hashmap;
     unordered_multimap <string, STAinfo> STA_hashmap;
-
-    unordered_multimap <string, EAPOLinfo> EAPOL_hashmap;
 
 private:
     void dot11_mgt_frame(PDU *packet, captureInfo *capInfo);
@@ -144,18 +140,18 @@ private:
         return output;
     }
 
-    inline void insertEAPOL(EAPOLinfo *eapolInfo, captureInfo *capInfo)
+    inline void insertEAPOL(STAinfo *eapolInfo, captureInfo *capInfo)
     {
         clog << "flag: " << capInfo->eapolFlag << endl;
 
         if ( capInfo->eapolFlag & EAPOL_FLAG_ANONCE )
-            eapolInfo->anonce = capInfo->anonce;
+            eapolInfo->eapol_anonce = capInfo->anonce;
 
         if ( capInfo->eapolFlag & EAPOL_FLAG_SNONCE )
-            eapolInfo->snonce = capInfo->snonce;
+            eapolInfo->eapol_snonce = capInfo->snonce;
 
         if ( capInfo->eapolFlag & EAPOL_FLAG_MIC )
-            eapolInfo->mic = capInfo->mic;
+            eapolInfo->eapol_mic = capInfo->mic;
     }
 
     void eapol_handshake(PDU *packet, captureInfo *capInfo);

@@ -285,8 +285,6 @@ void Capture::eapol_handshake(PDU *packet, captureInfo *capInfo)
 
     u_int keyInfo = keyType | keyAck | keyMic | install;
 
-    EAPOLinfo EAPOL;
-
     switch(keyInfo & EAPOL_MASK) {
         /* EAPOL Handshake 1 of 4 */
         case EAPOL_KEY_1:
@@ -353,6 +351,7 @@ void Capture::save_CaptureInfo(captureInfo *capInfo)
                     AP.cipher = capInfo->cipher;
                     AP.encryption = capInfo->encryption;
                     AP.beaconCount = 1;
+                    AP.EAPOLcount = 0;
 
                     AP_hashmap.insert(pair<string, APinfo>(capInfo->BSSID, AP));
                 }
@@ -427,58 +426,63 @@ void Capture::save_CaptureInfo(captureInfo *capInfo)
                 strftime(buf, sizeof(buf), "%Y-%m-%d %I:%M:%S", &tstruct);
                 string updateTime(buf);
 
-                auto EAPOLsearch = EAPOL_hashmap.find(capInfo->BSSID);
+                auto EAPOLsearch = STA_hashmap.find(capInfo->BSSID);
 
-                EAPOLinfo EAPOL;
+                STAinfo STA;
 
-                if (EAPOLsearch == EAPOL_hashmap.end()) {   /* First EAPOL info in AP */
+                if (EAPOLsearch == STA_hashmap.end()) {   /* First EAPOL info in AP */
 
-                    insertEAPOL(&EAPOL, capInfo);
+                    insertEAPOL(&STA, capInfo);
 
-                    EAPOL.STAmac = capInfo->STAmac;
-                    EAPOL.status |= capInfo->eapolFlag;
-                    EAPOL.updateTime = updateTime;
+                    STA.STAmac = capInfo->STAmac;
+                    STA.eapol_status |= capInfo->eapolFlag;
+                    STA.eapol_updateTime = updateTime;
+                    AP_hashmap[capInfo->BSSID].EAPOLcount = AP_hashmap[capInfo->BSSID].EAPOLcount + 1;
 
-                    EAPOL.timestamp = capInfo->timestamp;   /* radiotap mac time */
+                    STA.eapol_timestamp = capInfo->timestamp;   /* radiotap mac time */
 
-                    EAPOL_hashmap.insert(pair<string, EAPOLinfo>(capInfo->BSSID, EAPOL));
+                    STA_hashmap.insert(pair<string, STAinfo>(capInfo->BSSID, STA));
 
-                    clog << EAPOL.mic << " " << EAPOL.anonce << " " << EAPOL.snonce << endl;
+//                    clog << EAPOL.mic << " " << EAPOL.anonce << " " << EAPOL.snonce << endl;
 
                 } else {    /* Others */
-                    for (; EAPOLsearch != EAPOL_hashmap.end(); ++EAPOLsearch) {
+                    for (; EAPOLsearch != STA_hashmap.end(); ++EAPOLsearch) {
                         if (EAPOLsearch->second.STAmac == capInfo->STAmac) {
                             /* if collect all EAPOL Handshake */
-                            if ( EAPOLsearch->second.status == EAPOL_STATUS_COMPLETE )
+                            if ( EAPOLsearch->second.eapol_status == EAPOL_STATUS_COMPLETE )
                                 return;
 
+                            if ( EAPOLsearch->second.eapol_status == EAPOL_STATUS_NULL )
+                                AP_hashmap[capInfo->BSSID].EAPOLcount = AP_hashmap[capInfo->BSSID].EAPOLcount + 1;
+
                             /* if new EAPOL handshake */
-                            if ( 250000 < (capInfo->timestamp - EAPOLsearch->second.timestamp) ) {
-                                EAPOLsearch->second.snonce = "";
-                                EAPOLsearch->second.anonce = "";
-                                EAPOLsearch->second.mic = "";
-                                EAPOLsearch->second.status = 0;
+                            if ( 250000 < (capInfo->timestamp - EAPOLsearch->second.eapol_timestamp) ) {
+                                EAPOLsearch->second.eapol_snonce = "";
+                                EAPOLsearch->second.eapol_anonce = "";
+                                EAPOLsearch->second.eapol_mic = "";
+                                EAPOLsearch->second.eapol_status = 0;
                             }
 
                             insertEAPOL(&EAPOLsearch->second, capInfo);
 
-                            EAPOLsearch->second.updateTime = updateTime;
-                            EAPOLsearch->second.timestamp = capInfo->timestamp;
-                            EAPOLsearch->second.status = EAPOLsearch->second.status | capInfo->eapolFlag;
+                            EAPOLsearch->second.eapol_updateTime = updateTime;
+                            EAPOLsearch->second.eapol_timestamp = capInfo->timestamp;
+                            EAPOLsearch->second.eapol_status = EAPOLsearch->second.eapol_status | capInfo->eapolFlag;
 
                             return;
                         }
                     } // End loop
 
-                    insertEAPOL(&EAPOL, capInfo);
+                    insertEAPOL(&STA, capInfo);
 
-                    EAPOL.status = capInfo->eapolFlag;
-                    EAPOL.STAmac = capInfo->STAmac;
-                    EAPOL.updateTime = updateTime;
+                    STA.eapol_status = capInfo->eapolFlag;
+                    STA.STAmac = capInfo->STAmac;
+                    STA.eapol_updateTime = updateTime;
+                    AP_hashmap[capInfo->BSSID].EAPOLcount = AP_hashmap[capInfo->BSSID].EAPOLcount + 1;
 
-                    EAPOL.timestamp = capInfo->timestamp;   /* radiotap mac time */
+                    STA.eapol_timestamp = capInfo->timestamp;   /* radiotap mac time */
 
-                    EAPOL_hashmap.insert(pair<string, EAPOLinfo>(capInfo->BSSID, EAPOL));
+                    STA_hashmap.insert(pair<string, STAinfo>(capInfo->BSSID, STA));
                 }
 
             }
