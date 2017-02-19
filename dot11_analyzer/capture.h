@@ -27,6 +27,8 @@ using namespace std;
 #define FC_TYPE_CONTROL     0x10
 #define FC_TYPE_DATA        0x20
 
+#define FC_TYPE_MASK        0xf0
+
 #define FC_MGT_PROBEREQ     0x04
 #define FC_MGT_PROBERESP    0x05
 #define FC_MGT_BEACON       0x08
