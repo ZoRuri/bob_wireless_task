@@ -17,6 +17,7 @@
 #include <set>
 
 #include <string.h>
+#include <arpa/inet.h>
 
 #define HTTP_FILED_NAME  1
 #define HTTP_FILED_VALUE 2
@@ -198,12 +199,8 @@ int HTTP_filter(unsigned char *buf, int len) {
             if (offset == 0)    // Prevent infinity loop
                 break;
 
-            clog << "len " << len << " " << offset << endl;
-            //clog << "name : " << reqHeader.filed.name << "value: " << reqHeader.filed.value << endl;
-
             if (strcmp("Host", reqHeader.filed.name.c_str()) == 0 &&
                     domain.find(reqHeader.filed.value) != domain.end()) {
-                clog << reqHeader.filed.name << " " << reqHeader.filed.value << endl;
                 return HTTP_FILTER_DENY;
             }
 
@@ -252,23 +249,76 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 
         case HTTP_FILTER_DENY:
         {
-            struct iphdr *ipHeader = (struct iphdr *)buf;
-            struct tcphdr *tcpHeader = (struct tcphdr *)(buf + ipHeader->ihl * 4);
+//            u_char buf2[] = {
+//                0x45, 0x00, 0x00, 0x65, 0xfc, 0x48, 0x00, 0x00, 0xc4, 0x06, 0xbb, 0xc7, 0xce,
+//                0x7d, 0xa4, 0x52, 0xc0, 0xa8, 0x0b, 0x0a, 0x00, 0x50, 0xd4, 0x43, 0x63, 0x71,
+//                0xc2, 0xb0, 0x8b, 0x4e, 0xfe, 0xfc, 0x50, 0x19, 0x00, 0x00, 0x24, 0xe7, 0x00,
+//                0x00, 0x48, 0x54, 0x54, 0x50, 0x2f, 0x31, 0x2e, 0x30, 0x20, 0x33, 0x30, 0x32,
+//                0x20, 0x52, 0x65, 0x64, 0x69, 0x72, 0x65, 0x63, 0x74, 0x0d, 0x0a, 0x4c, 0x6f,
+//                0x63, 0x61, 0x74, 0x69, 0x6f, 0x6e, 0x3a, 0x20, 0x68, 0x74, 0x74, 0x70, 0x3a,
+//                0x2f, 0x2f, 0x77, 0x77, 0x77, 0x2e, 0x77, 0x61, 0x72, 0x6e, 0x69, 0x6e, 0x67,
+//                0x2e, 0x6f, 0x72, 0x2e, 0x6b, 0x72, 0x0d, 0x0a, 0x0d, 0x0a
+//            };
 
-            ipHeader->daddr = 0x5239bd79;
-            ipHeader->check = ntohs(get_IP_checksum(buf));
+//            struct iphdr *ipHeader = (struct iphdr *)buf;
+//            struct tcphdr *tcpHeader = (struct tcphdr *)(buf + ipHeader->ihl * 4);
 
-            tcpHeader->check = ntohs(get_TCP_checksum(buf));
+//            struct iphdr *ipHeader2 = (struct iphdr *)buf2;
+//            struct tcphdr *tcpHeader2 = (struct tcphdr *)(buf2 + ipHeader->ihl * 4);
 
-//            for (int i = 0; i < ret; ++i) {
-//                if((i % 16) == 0)
-//                    printf("\n");
-//                printf("%02X", buf[i]);
-//                printf(" ");
+//            ipHeader2->daddr = ipHeader->saddr;
+//            ipHeader2->saddr = ipHeader->daddr;
+
+//            tcpHeader2->source = tcpHeader->dest;
+//            tcpHeader2->dest   = tcpHeader->source;
+
+//            //ipHeader->daddr = 0x5239bd79;
+
+//            ipHeader2->check = ntohs(get_IP_checksum(buf2));
+//            tcpHeader2->check = ntohs(get_TCP_checksum(buf2));
+
+//            int sockfd;
+//            string request = "";
+//            request+="GET / HTTP/1.1\r\n";
+//            request+="Host: www.gilgil.net\r\n";
+//            request+="\r\n";
+
+//            if ( (sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+//                perror("socket error");
+//                exit(1);
 //            }
 
-//            clog << "deny" << endl;
-            return nfq_set_verdict(qh, id, NF_ACCEPT, ret, buf);
+//            clog << "socket" << endl;
+
+//            struct sockaddr_in servaddr;
+//            servaddr.sin_family = AF_INET;
+//            servaddr.sin_port   = htons(80);
+
+//            int ret;
+
+//            if ((ret = inet_pton(AF_INET, "61.73.111.238", &servaddr.sin_addr)) < 0)
+//                exit(1);
+//            else if (!ret)
+//                exit(1);
+
+//            clog << "inet_pton" << endl;
+
+//            if (connect(sockfd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {
+//                perror("connect error");
+//                exit(1);
+//            }
+
+//            clog << "connect" << endl;
+
+//            if (send(sockfd, request.c_str(), request.length(), 0) != request.length()) {
+//                perror("send error");
+//                exit(1);
+//            }
+
+//            clog << "send" << endl;
+
+            return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+            //return nfq_set_verdict(qh, id, NF_ACCEPT, sizeof(buf2), buf2);
             //return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
         }
 
