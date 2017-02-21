@@ -22,6 +22,9 @@
 #define HTTP_FILED_NAME  1
 #define HTTP_FILED_VALUE 2
 
+#define HTTP_FILED_NAME  1
+#define HTTP_FILED_VALUE 2
+
 #define NOT_HTTP_PACKET    0
 #define HTTP_FILTER_PERMIT 1
 #define HTTP_FILTER_DENY   2
@@ -115,20 +118,55 @@ void rule_parser(const char *filename) {
 
     string temp = "";
 
-    if ( fp = fopen(filename, "r") )
-    {
-        while ( fread(str, 1, 1, fp) ) {
-            if ( strcmp(str, "\n") == 0 ) {
-                domain.insert(temp);
-                temp = "";
-            } else {
-                temp.append(str);
-            }
-        }
-
-        fclose(fp);
+    if ( (fp = fopen(filename, "r")) == NULL ) {
+        perror("fopen error");
+        exit(1);
     }
 
+    while ( fread(str, 1, 1, fp) ) {
+        if ( strcmp(str, "\n") == 0 ) {
+            domain.insert(temp);
+            temp = "";
+        } else {
+            temp.append(str);
+        }
+    }
+
+    fclose(fp);
+
+}
+
+int HTTP_reqLine_parser(u_char *buf, HTTP_Request_Header *reqHeader, int len) {
+    int i = 0;
+
+    while (buf[i] != ' ') {
+        reqHeader->method += buf[i];
+        ++i;
+        if (i > len)
+            return -1;
+    }
+
+    ++i;    // SP offset
+
+    while (buf[i] != ' ') {
+        reqHeader->URI += buf[i];
+        ++i;
+        if (i > len)
+            return -1;
+    }
+
+    ++i;    // SP offset
+
+    while ( !(buf[i] == '\r' && buf[i + 1] == '\n') ) {
+        reqHeader->version += buf[i];
+        ++i;
+        if (i > len)
+            return -1;
+    }
+
+    i += 2; // CRLF offset
+
+    return i;
 }
 
 int HTTP_field_parser(u_char *buf, HTTP_Request_Header *reqHeader, int len) {
@@ -142,7 +180,7 @@ int HTTP_field_parser(u_char *buf, HTTP_Request_Header *reqHeader, int len) {
     for (i = 0; i < len; ++i)
     {
         if (buf[i] == '\r' && buf[i + 1] == '\n')  {
-            i += 2;
+            i += 2; // CRLF offset
             break;
         }
 
@@ -178,17 +216,18 @@ int HTTP_filter(unsigned char *buf, int len) {
 
         HTTP_Request_Header reqHeader;
 
-        int i = 0;
+        offset = HTTP_reqLine_parser(buf, &reqHeader, len);
 
-        while ( !(buf[i] == '\r' && buf[i + 1] == '\n') ) {
-            printf("%c", buf[i]);
-            ++i;
+        /* if NOT HTTP PACKET */
+        if (reqHeader.method.empty() && reqHeader.URI.empty() &&
+                reqHeader.version.empty()) {
+            return NOT_HTTP_PACKET;
         }
 
-        i += 2; // CRLF offset
+        clog << reqHeader.method << " " << reqHeader.URI << " " << reqHeader.version << endl;
 
-        buf += i;
-        len -= i;
+        buf += offset;
+        len -= offset;
 
         while (len) {
             offset = HTTP_field_parser(buf, &reqHeader, len);
@@ -204,13 +243,10 @@ int HTTP_filter(unsigned char *buf, int len) {
                 return HTTP_FILTER_DENY;
             }
 
-            //printf("len: %d %d\n", len, offset);
         }
 
         return HTTP_FILTER_PERMIT;
     }
-
-    printf("\n");
 
     return NOT_HTTP_PACKET;
 }
@@ -317,9 +353,9 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 
 //            clog << "send" << endl;
 
-            return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
+            //return nfq_set_verdict(qh, id, NF_ACCEPT, 0, NULL);
             //return nfq_set_verdict(qh, id, NF_ACCEPT, sizeof(buf2), buf2);
-            //return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
+            return nfq_set_verdict(qh, id, NF_DROP, 0, NULL);
         }
 
         default:
@@ -330,6 +366,11 @@ static int cb(struct nfq_q_handle *qh, struct nfgenmsg *nfmsg,
 
 }
 
+void usage(char *name) {
+    printf("Usage: %s <URL list file>\n", name);
+    exit(1);
+}
+
 int main(int argc, char **argv)
 {
     struct nfq_handle *h;
@@ -338,6 +379,9 @@ int main(int argc, char **argv)
 	int fd;
 	int rv;
 	char buf[4096] __attribute__ ((aligned));
+
+    if (argc != 2)
+        usage(argv[0]);
 
     rule_parser(argv[1]);
 
