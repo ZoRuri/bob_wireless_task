@@ -18,16 +18,16 @@ int isResponse(const Dot11ProbeRequest &proveReq);
 inline int DS_status(const Dot11 &dot11) { return dot11.from_ds() * 2 + dot11.to_ds(); }
 
 map<string, string> listSSID {
-    {"00:01:36:11:11:22", "길길짱잘생김"},
-    {"00:01:36:11:44:11", "테스트0"},
-    {"00:01:36:11:33:11", "테스트1"},
-    {"00:01:36:55:66:77", "테스트2"},
-    {"00:01:36:11:22:33", "테스트3"},
-    {"00:01:36:77:88:99", "테스트4"},
-    {"00:01:36:77:88:AA", "테스트5"},
+    {"00:01:37:11:11:22", "GilGil"},
+    {"00:01:38:11:44:11", "Test0"},
+    {"00:01:39:11:33:11", "Test1"},
+    {"00:01:46:55:66:77", "Test2"},
+    {"00:01:26:11:22:33", "Test3"},
+    {"00:01:16:77:88:99", "Test4"},
+    {"00:01:06:77:88:AA", "Test5"},
 };
 
-#define INTERFACE "wlan4"
+#define INTERFACE "wlan0"
 
 #define	ISRESP_BROADCAST 1
 #define ISRESP_UNICAST  2
@@ -44,26 +44,75 @@ int main(int argc, char *argv[])
 }
 
 void send_Beacon() {
+    SnifferConfiguration config;
+    config.set_rfmon(true);
+    Sniffer sniffer(INTERFACE, config);
+
     PacketSender sender(INTERFACE);
+
+    /* TIM struct */
+    Dot11ManagementFrame::tim_type tim;
+
+    tim.dtim_count = 1;
+    tim.dtim_period = 3;
+    tim.bitmap_control = 0;
+    tim.partial_virtual_bitmap.insert(tim.partial_virtual_bitmap.begin(), 0);
+
+    int i= 0;
+
+    printf("in\n");
 
     while(true) {
         for (map<string, string>::iterator it = listSSID.begin(); it!=listSSID.end(); ++it) {
 
             RadioTap radiotap;
 
-            radiotap.dbm_signal(-100);
-
             Dot11Beacon beacon;
+
 
             beacon.addr1(Dot11::BROADCAST);
             beacon.addr2(it->first);
             beacon.addr3(beacon.addr2());
 
-            beacon.ssid(it->second);
-            beacon.supported_rates({ 1.0f, 5.5f, 11.0f, 6, 9, 12, 18 });
-            beacon.ds_parameter_set(8);
+            /* Fixed parameters */
+            beacon.interval(100);
 
+            /* Capabilities info struct */
+            beacon.capabilities().ess(1);
+            beacon.capabilities().ibss(0);
+
+            beacon.capabilities().cf_poll(0);
+            beacon.capabilities().cf_poll_req(0);
+            beacon.capabilities().qos(0);
+
+            beacon.capabilities().privacy(1);
+            beacon.capabilities().short_preamble(0);
+            beacon.capabilities().pbcc(0);
+            beacon.capabilities().channel_agility(0);
+            beacon.capabilities().spectrum_mgmt(0);
+            beacon.capabilities().sst(1);
+
+            beacon.capabilities().apsd(0);
+            beacon.capabilities().radio_measurement(0);
+            beacon.capabilities().dsss_ofdm(0);
+            beacon.capabilities().delayed_block_ack(0);
+            beacon.capabilities().immediate_block_ack(0);
+
+            /* Tagged parameters */
+            beacon.ssid(it->second);
+            beacon.supported_rates({ 1.0f, 2.0f, 5.5f, 11.0f, 6, 9, 12, 18 });
+            beacon.ds_parameter_set(10);
+            beacon.tim(tim);
             beacon.erp_information(0);
+
+            Dot11Beacon::vendor_specific_type vendor;
+            vendor.oui = "00:50:f2";
+            vendor.data.insert(vendor.data.end(),
+            {0x02, 0x01, 0x01, 0x00, 0x00, 0x03, 0xa4, 0x00, 0x00, 0x27, 0xa4,
+             0x00, 0x00, 0x42, 0x43, 0x5e, 0x00, 0x62, 0x32, 0x2f, 0x00});
+
+            beacon.vendor_specific(vendor);
+
             beacon.extended_supported_rates({ 24, 36, 48, 54 });
 
             beacon.rsn_information(RSNInformation::wpa2_psk());
@@ -71,8 +120,13 @@ void send_Beacon() {
             radiotap.inner_pdu(beacon);
 
             sender.send(radiotap);
-            usleep(10000);
+            usleep(100);
+
+
+            printf("\r%d", ++i);
         }
+        usleep(10000);
+
     }
 }
 
