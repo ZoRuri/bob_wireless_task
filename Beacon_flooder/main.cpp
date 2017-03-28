@@ -17,15 +17,20 @@ int isResponse(const Dot11ProbeRequest &proveReq);
 
 inline int DS_status(const Dot11 &dot11) { return dot11.from_ds() * 2 + dot11.to_ds(); }
 
-map<string, string> listSSID {
-    {"00:01:37:11:11:22", "1.테스트"},
-    {"00:01:38:11:44:11", "2.ㅁㅇㅁㅇ"},
-    {"00:01:39:11:33:11", "3.테스트테스트"},
-    {"00:01:46:55:66:77", "Test2"},
-    {"00:01:26:11:22:33", "Test3"},
-    {"00:01:16:77:88:99", "Test4"},
-    {"00:01:06:77:88:AA", "Test5"},
-};
+void listSSID_initialize(const char *filename);
+string mac_generate(string oui);
+
+inline string toHexStream(int num) {
+    std::string result;
+    std::stringstream temp;
+
+    temp << std::hex << std::setw(6) << std::setfill('0') << num;
+    temp >> result;
+
+    return result;
+}
+
+map<string, string> listSSID = {};
 
 #define INTERFACE "wlx00a82b000c8e"
 
@@ -34,14 +39,24 @@ map<string, string> listSSID {
 
 std::string interface = "";
 
+int generate_num = 0;
+
 int main(int argc, char *argv[])
 {
-    if (argc != 2) {
-        printf("Usage: %s <interface>\n", argv[0]);
+    if (argc != 3) {
+        printf("Usage: %s <interface> <SSID File>\n", argv[0]);
         exit(0);
     }
 
     interface = argv[1];
+
+    listSSID_initialize(argv[2]);
+
+    clog << "== SSID list ==" << endl;
+
+    for (auto it = listSSID.begin(); it!=listSSID.end(); ++it) {
+        clog << it->first << "  " << it->second << endl;
+    }
 
     /* Thread for send beacon */
     thread beaconThread(&send_Beacon);
@@ -130,7 +145,7 @@ void send_Beacon() {
             sender.send(radiotap);
             usleep(100);
 
-            printf("\r%d", ++i);
+            printf("\raa: %d", ++i);
         }
         usleep(10000);
 
@@ -139,6 +154,10 @@ void send_Beacon() {
 
 void recv_Packet() {
     Sniffer sniffer(interface, Sniffer::PROMISC);
+
+    int j = 0;
+
+    printf("in recv\n");
 
     while (true) {
         PDU *packet = sniffer.next_packet();
@@ -158,6 +177,7 @@ void recv_Packet() {
 
         }
 
+
         /* Send probe response when received probe request */
         if (dot11.type() == Dot11::MANAGEMENT) {
             if (dot11.subtype() == Dot11::PROBE_REQ) {
@@ -167,7 +187,8 @@ void recv_Packet() {
                     {
                         for (map<string, string>::iterator it = listSSID.begin(); it!=listSSID.end(); ++it) {
                             send_probeResp(it->first, proveReq.addr2().to_string(), it->second);
-                            usleep(10000);
+                            printf("\r%d", j++);
+                            usleep(100);
                         }
                         break;
                     }
@@ -176,6 +197,7 @@ void recv_Packet() {
                     {
                         map<string, string>::iterator it = listSSID.find( proveReq.addr1().to_string() );
                         send_probeResp(it->first, proveReq.addr2().to_string(), it->second);
+                        //printf("%d", j++);
                         break;
                     }
 
@@ -225,4 +247,45 @@ void send_probeResp(string srcaddr, string desaddr, string ssid) {
     radiotap.inner_pdu(ProbeResp);
 
     sender.send(radiotap);
+}
+
+void listSSID_initialize(const char *filename) {
+    FILE *fp;
+    char str[65535];
+
+    string temp = "";
+
+    if ( (fp = fopen(filename, "r")) == NULL ) {
+        perror("fopen error");
+        exit(1);
+    }
+
+    int buf = 0;
+
+    while ( buf = fread(str, 1, 1, fp) ) {
+        if ( strcmp(str, "\n") == 0 ) {
+            listSSID.insert( pair<string, string>(mac_generate("00:01:36"), temp) );
+            temp = "";
+        } else {
+            temp.append(str);
+        }
+    }
+
+    fclose(fp);
+}
+
+string mac_generate(string oui) {
+    string result = "";
+
+    oui += ':';
+
+    string serial_num;
+    serial_num = toHexStream(++generate_num);
+
+    serial_num.insert(2, ":");
+    serial_num.insert(5, ":");
+
+    result = oui + serial_num;
+
+    return result;
 }
