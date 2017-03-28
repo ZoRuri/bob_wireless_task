@@ -18,22 +18,31 @@ int isResponse(const Dot11ProbeRequest &proveReq);
 inline int DS_status(const Dot11 &dot11) { return dot11.from_ds() * 2 + dot11.to_ds(); }
 
 map<string, string> listSSID {
-    {"00:01:37:11:11:22", "GilGil"},
-    {"00:01:38:11:44:11", "Test0"},
-    {"00:01:39:11:33:11", "Test1"},
+    {"00:01:37:11:11:22", "1.테스트"},
+    {"00:01:38:11:44:11", "2.ㅁㅇㅁㅇ"},
+    {"00:01:39:11:33:11", "3.테스트테스트"},
     {"00:01:46:55:66:77", "Test2"},
     {"00:01:26:11:22:33", "Test3"},
     {"00:01:16:77:88:99", "Test4"},
     {"00:01:06:77:88:AA", "Test5"},
 };
 
-#define INTERFACE "wlan0"
+#define INTERFACE "wlx00a82b000c8e"
 
 #define	ISRESP_BROADCAST 1
 #define ISRESP_UNICAST  2
 
+std::string interface = "";
+
 int main(int argc, char *argv[])
 {
+    if (argc != 2) {
+        printf("Usage: %s <interface>\n", argv[0]);
+        exit(0);
+    }
+
+    interface = argv[1];
+
     /* Thread for send beacon */
     thread beaconThread(&send_Beacon);
     /* Thread for recv packet & send probeResp */
@@ -46,9 +55,9 @@ int main(int argc, char *argv[])
 void send_Beacon() {
     SnifferConfiguration config;
     config.set_rfmon(true);
-    Sniffer sniffer(INTERFACE, config);
+    Sniffer sniffer(interface, config);
 
-    PacketSender sender(INTERFACE);
+    PacketSender sender(interface);
 
     /* TIM struct */
     Dot11ManagementFrame::tim_type tim;
@@ -68,7 +77,6 @@ void send_Beacon() {
             RadioTap radiotap;
 
             Dot11Beacon beacon;
-
 
             beacon.addr1(Dot11::BROADCAST);
             beacon.addr2(it->first);
@@ -122,7 +130,6 @@ void send_Beacon() {
             sender.send(radiotap);
             usleep(100);
 
-
             printf("\r%d", ++i);
         }
         usleep(10000);
@@ -131,7 +138,7 @@ void send_Beacon() {
 }
 
 void recv_Packet() {
-    Sniffer sniffer(INTERFACE, Sniffer::PROMISC);
+    Sniffer sniffer(interface, Sniffer::PROMISC);
 
     while (true) {
         PDU *packet = sniffer.next_packet();
@@ -197,7 +204,7 @@ int isResponse(const Dot11ProbeRequest &proveReq) {
 }
 
 void send_probeResp(string srcaddr, string desaddr, string ssid) {
-    PacketSender sender(INTERFACE);
+    PacketSender sender(interface);
 
     RadioTap radiotap;
     Dot11ProbeResponse ProbeResp;
@@ -205,7 +212,7 @@ void send_probeResp(string srcaddr, string desaddr, string ssid) {
     ProbeResp.addr1(desaddr);
 
     ProbeResp.ds_parameter_set(8);
-    ProbeResp.supported_rates({ 1.0f, 5.5f, 11.0f, 6, 9, 12, 18 });
+    ProbeResp.supported_rates({ 1.0f, 2.0f, 5.5f, 11.0f, 6, 9, 12, 18 });
     ProbeResp.erp_information(0);
     ProbeResp.extended_supported_rates({ 24, 36, 48, 54 });
 
