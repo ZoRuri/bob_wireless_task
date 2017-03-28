@@ -32,8 +32,6 @@ inline string toHexStream(int num) {
 
 map<string, string> listSSID = {};
 
-#define INTERFACE "wlx00a82b000c8e"
-
 #define	ISRESP_BROADCAST 1
 #define ISRESP_UNICAST  2
 
@@ -49,7 +47,6 @@ int main(int argc, char *argv[])
     }
 
     interface = argv[1];
-
     listSSID_initialize(argv[2]);
 
     clog << "== SSID list ==" << endl;
@@ -60,11 +57,12 @@ int main(int argc, char *argv[])
 
     /* Thread for send beacon */
     thread beaconThread(&send_Beacon);
+
     /* Thread for recv packet & send probeResp */
-    thread recvThread(&recv_Packet);
+    //thread recvThread(&recv_Packet);      temporarily annotation for reduce overhead
 
     beaconThread.join();
-    recvThread.join();
+    //recvThread.join();
 }
 
 void send_Beacon() {
@@ -83,8 +81,6 @@ void send_Beacon() {
     tim.partial_virtual_bitmap.insert(tim.partial_virtual_bitmap.begin(), 0);
 
     int i= 0;
-
-    printf("in\n");
 
     while(true) {
         for (map<string, string>::iterator it = listSSID.begin(); it!=listSSID.end(); ++it) {
@@ -145,7 +141,7 @@ void send_Beacon() {
             sender.send(radiotap);
             usleep(100);
 
-            printf("\raa: %d", ++i);
+            printf("\rPacket send: %d", ++i);
         }
         usleep(10000);
 
@@ -197,7 +193,6 @@ void recv_Packet() {
                     {
                         map<string, string>::iterator it = listSSID.find( proveReq.addr1().to_string() );
                         send_probeResp(it->first, proveReq.addr2().to_string(), it->second);
-                        //printf("%d", j++);
                         break;
                     }
 
